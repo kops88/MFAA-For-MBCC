@@ -5,6 +5,7 @@ using Avalonia.Layout;
 using Avalonia.Media;
 using Avalonia.Media.Imaging;
 using Avalonia.Platform;
+using MFAAvalonia.Card.ViewModel;
 using MFAAvalonia.Helper;
 using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.Views.UserControls.Card;
@@ -32,8 +33,6 @@ public sealed class CCMgr
     public void PostLoading()
     {
         _ = PullOne();
-        LoggerHelper.Info("0099 pullOnre_real");
-        
     }
 
 
@@ -91,9 +90,12 @@ public sealed class CCMgr
             CCVM.addcard(cardVm);
             // 2) UI状态更新：同步更新 PulledCard
             CCVM.PulledCard = cardVm;
-
+            var pullres = new List<CardViewModel>();
+            pullres.Add(cardVm);
+            var pullvm = new PullResultViewModel(pullres);
             // 3) 弹窗展示
-            var window = new PullResult(cardVm);
+            var window = new PullResult(pullvm);
+
 
             // Owner 可能已关闭，这里做兼容避免崩溃
             var owner = Instances.RootView;
@@ -116,13 +118,8 @@ public sealed class CCMgr
             }
 
             try
-            {
-                var window = new PullResult(null, $"抽卡失败：{ex.Message}");
+            { 
                 var owner = Instances.RootView;
-                if (owner != null && owner.IsVisible)
-                    await window.ShowDialog(owner);
-                else
-                    window.Show();
             }
             catch
             {
@@ -149,9 +146,21 @@ public sealed class CCMgr
         CCVM.SwapCard(in_cur_idx1, in_hov_indx2);
     }
 
+    /// <summary>
+    /// 根据索引删除卡片
+    /// </summary>
+    /// <param name="index">要删除的卡片索引</param>
+    /// <returns>删除成功返回 true，否则 false</returns>
+    public bool RemoveCardByIndex(int index)
+    {
+        if (CCVM is null) return false;
+        return CCVM.RemoveCardAt(index);
+    }
+
     public const int undefine = -1;
     
     private static readonly Dictionary<string, Bitmap> AssetBitmapCache = new(StringComparer.OrdinalIgnoreCase);
+
 
     public static IImage? LoadImageFromAssets(string path)
     {

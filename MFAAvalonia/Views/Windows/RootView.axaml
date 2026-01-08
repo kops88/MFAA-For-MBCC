@@ -24,6 +24,7 @@
     xmlns:suki="https://github.com/kikipoulet/SukiUI"
     xmlns:windows="clr-namespace:MFAAvalonia.ViewModels.Windows"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="clr-namespace:MFAAvalonia.ViewModels.UsersControls.Settings"
     NonClientAreaContentIsHitTestVisible="True"
     xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent.Markup;assembly=FluentIcons.Avalonia.Fluent">
     <suki:SukiWindow.Styles>
@@ -253,12 +254,11 @@
                                            IsVisible="False"
                                            PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:ResourcesView}}" />
                     <suki:SukiSideMenuItem IsContentMovable="False"
-                                           Header="收藏"
-                                           Icon="{fluent:FluentIcon Icon=Apps,
-                                                       IconVariant=Regular}"
-                                           IsVisible="True"
+                                           Header="卡片"
+                                           Icon="{fluent:FluentIcon Icon=PlayingCards,
+                                           IconVariant=Regular}"
+                                           IsVisible="{Binding EnableCardSystem}"
                                            PageContent="{extensions:ServiceProvider ServiceType={x:Type pages:CardCollection}}" />
-
                 </suki:SukiSideMenu.Items>
 
                 <suki:SukiSideMenu.HeaderContent>

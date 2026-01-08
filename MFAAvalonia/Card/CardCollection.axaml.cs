@@ -67,6 +67,8 @@ public partial class CardCollection : UserControl
         AddHandler(PointerMovedEvent, OnPointerMoved, RoutingStrategies.Tunnel);
     }
     
+    private int _clickRegion;  // 记录点击区域，用于释放时判断
+    
     private void OnPointerPressed(object sender, PointerPressedEventArgs e)
     {
         
@@ -94,8 +96,7 @@ public partial class CardCollection : UserControl
             e.Pointer.Capture(this);
             var vm = (DraggingCard.DataContext) as CardViewModel;
             cur_index = vm.Index;  // 记录当前拖拽卡片的索引
-            int clickRegion = GetClickRegion(e);  // 右30%=1, 左30%=-1, 中间=0
-            mgr.SetSelectedCard(vm, clickRegion);
+            _clickRegion = GetClickRegion(e);  // 记录点击区域，延迟到释放时使用
         }
         else
         {
@@ -148,7 +149,8 @@ public partial class CardCollection : UserControl
 
         if (IsDragging && IsDragStarted)
         {
-            e.Handled = true;  // 只在拖拽时阻止事件传播
+            // 真正拖拽了，不打开细节栏
+            e.Handled = true;
             this.IsDragging = false;
             this.IsDragStarted = false;
             e.Pointer.Capture(null);
@@ -170,7 +172,7 @@ public partial class CardCollection : UserControl
             cur_index = undefine;
             hov_index = undefine;
         } 
-        else if (IsDragging)  // 点击但未拖拽，重置状态
+        else if (IsDragging)  // 点击但未拖拽，打开细节栏
         {
             this.IsDragging = false;
             this.IsDragStarted = false;
@@ -178,6 +180,14 @@ public partial class CardCollection : UserControl
             transform.Y = 0;
             e.Pointer.Capture(null);
             DraggingCard.ZIndex -= 1;
+            
+            // 只有点击未拖拽时才打开细节栏
+            var vm = DraggingCard.DataContext as CardViewModel;
+            if (vm != null)
+            {
+                mgr.SetSelectedCard(vm, _clickRegion);
+            }
+            
             cur_index = undefine;
             hov_index = undefine;
         }

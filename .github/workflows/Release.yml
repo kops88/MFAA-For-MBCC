@@ -143,7 +143,14 @@ jobs:
         shell: bash
         run: |
           BUILD_DIR="bin/AnyCPU/Release/${{ matrix.platform }}-${{ matrix.arch }}/publish"
-          OUTPUT_FILE="MFAAvalonia-${{ needs.meta.outputs.tag }}-${{ matrix.platform }}-${{ matrix.arch }}.zip"
+          
+          # 转换平台名: osx -> macos, win -> win
+          DISPLAY_PLATFORM="${{ matrix.platform }}"
+          if [[ "$DISPLAY_PLATFORM" == "osx" ]]; then
+            DISPLAY_PLATFORM="macos"
+          fi
+          
+          OUTPUT_FILE="MFAA_For_MBCCtools-${{ needs.meta.outputs.tag }}-${DISPLAY_PLATFORM}-${{ matrix.arch }}.zip"
           
           # 直接压缩构建目录
           cd $BUILD_DIR
@@ -171,6 +178,12 @@ jobs:
         run: |
           cd artifacts
           for f in *; do
+            # 转换平台名用于输出文件名
+            DISPLAY_PLATFORM="$f"
+            if [[ $f == *"osx"* ]]; then
+              DISPLAY_PLATFORM=$(echo "$f" | sed 's/osx/macos/')
+            fi
+            
             if [[ $f == *"win"* ]]; then
               # Windows artifacts: keep original zip files as they are already in correct format
               echo "Processing Windows artifact: $f - keeping original zip format"
@@ -202,8 +215,8 @@ jobs:
               echo "Set execute permission for all .sh files"
               
               # Create tar.gz with preserved permissions
-              tar -cpzf ../MFAAvalonia-${{ needs.meta.outputs.tag }}-${f}.tar.gz .
-              echo "Created archive with preserved permissions: MFAAvalonia-${{ needs.meta.outputs.tag }}-${f}.tar.gz"
+              tar -cpzf ../MFAA_For_MBCCtools-${{ needs.meta.outputs.tag }}-${DISPLAY_PLATFORM}.tar.gz .
+              echo "Created archive with preserved permissions: MFAA_For_MBCCtools-${{ needs.meta.outputs.tag }}-${DISPLAY_PLATFORM}.tar.gz"
               
               cd ..
               # Remove the original directory to avoid duplicate files

@@ -9,6 +9,7 @@ using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
+using Avalonia.Diagnostics;
 using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.ViewModels.Windows;
 using SukiUI.Controls;
@@ -64,14 +65,20 @@ public partial class RootView : SukiWindow
                 // 加载UI
                 LoadUI();
 
-                CCMgr.Instance.PullOne_real();
+                var enableCardSystem = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCardSystem, true);
+                var loginAutoPull = ConfigurationManager.Current.GetValue(ConfigurationKeys.LoginAutoPull, true);
+
+                if (enableCardSystem && loginAutoPull)
+                {
+                    _ = CCMgr.Instance.PullOne();
+                }
             });
+
         };
         if (Program.IsNewInstance)
         {
             MaaProcessor.Instance.InitializeData();
         }
-
     }
 
 

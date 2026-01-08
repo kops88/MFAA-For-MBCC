@@ -109,6 +109,13 @@ public class MaaProcessor
             LoggerHelper.Error(e);
         }
     }
+    private static bool _isClosed = false;
+    public static bool IsClosed => _isClosed;
+    public static void Dispose()
+    {
+        _isClosed = true;
+        Instances.TaskQueueView.StopLiveViewLoop();
+    }
 
     public static MaaInterface? Interface
     {
@@ -170,6 +177,18 @@ public class MaaProcessor
                 {
                     LanguageHelper.LoadLanguagesFromInterface(value.Languages, AppContext.BaseDirectory);
                 }
+
+                if (Instances.IsResolved<TaskQueueViewModel>())
+                {
+                    Instances.TaskQueueViewModel.InitializeControllerOptions();
+                }
+                else
+                {
+                    DispatcherHelper.PostOnMainThread(() => Instances.TaskQueueViewModel.InitializeControllerOptions());
+                }
+
+                // 异步加载 Contact 和 Description 内容
+                _ = LoadContactAndDescriptionAsync(value);
             }
 
         }
@@ -224,6 +243,7 @@ public class MaaProcessor
 
     public static MaaFWConfiguration Config { get; } = new();
     public MaaTasker? MaaTasker { get; set; }
+    private MaaTasker? _screenshotTasker;
 
     public void SetTasker(MaaTasker? maaTasker = null)
     {
@@ -260,10 +280,12 @@ public class MaaProcessor
             _agentStarted = false;
             SafeKillAgentProcess(oldTasker);
             Instances.TaskQueueViewModel.SetConnected(false);
+            DisposeScreenshotTasker();
         }
         else if (maaTasker != null)
         {
             MaaTasker = maaTasker;
+            DisposeScreenshotTasker();
         }
     }
 
@@ -287,6 +309,57 @@ public class MaaProcessor
         return (MaaTasker, tuple.Item2, tuple.Item3);
     }
 
+    private bool UseSeparateScreenshotTasker =>
+        ConfigurationManager.Maa.GetValue(ConfigurationKeys.UseSeparateScreenshotTasker, true);
+
+    private MaaTasker? GetScreenshotTasker(CancellationToken token = default)
+    {
+        if (!UseSeparateScreenshotTasker)
+        {
+            DisposeScreenshotTasker();
+            return MaaTasker;
+        }
+
+        if (_screenshotTasker == null && !_isClosed)
+        {
+            var task = InitializeScreenshotTaskerAsync(token);
+            task.Wait(token);
+            _screenshotTasker = task.Result;
+        }
+
+        return _screenshotTasker;
+    }
+
+    private void DisposeScreenshotTasker()
+    {
+        if (_screenshotTasker == null)
+            return;
+
+        var screenshotTasker = _screenshotTasker;
+        _screenshotTasker = null;
+
+        try
+        {
+            if (screenshotTasker.IsRunning && !screenshotTasker.IsStopping)
+            {
+                screenshotTasker.Stop().Wait();
+            }
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker Stop failed: {ex.Message}");
+        }
+
+        try
+        {
+            screenshotTasker.Dispose();
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker Dispose failed: {ex.Message}");
+        }
+    }
+
     public ObservableCollection<DragItemViewModel> TasksSource { get; private set; } =
         [];
     public AutoInitDictionary AutoInitDictionary { get; } = new();
@@ -298,31 +371,43 @@ public class MaaProcessor
     private Process? _agentProcess;
     private MFATask.MFATaskStatus Status = MFATask.MFATaskStatus.NOT_STARTED;
 
+    private IMaaController? GetScreenshotController(bool test)
+    {
+        if (test && !_isClosed)
+            TryConnectAsync(CancellationToken.None);
+
+        return GetScreenshotTasker(CancellationToken.None)?.Controller;
+    }
+
+    private bool ShouldScreencapForLiveView()
+    {
+        return MaaTasker?.IsRunning != true && !_isClosed;
+    }
+
     public Bitmap? GetBitmapImage(bool test = true)
     {
-        if (test)
-            TryConnectAsync(CancellationToken.None);
-        using var buffer = GetImage(MaaTasker?.Controller);
+        var controller = GetScreenshotController(test);
+        using var buffer = GetImage(controller);
         return buffer?.ToBitmap();
     }
 
     public Bitmap? GetLiveView(bool test = true)
     {
-        if (test)
-            TryConnectAsync(CancellationToken.None);
-        using var buffer = GetImage(MaaTasker?.Controller, MaaTasker?.IsRunning != true);
+        var controller = GetScreenshotController(test);
+        using var buffer = GetImage(controller, ShouldScreencapForLiveView());
         return buffer?.ToBitmap();
     }
 
     public Bitmap? GetLiveViewCached()
     {
-        using var buffer = GetImage(MaaTasker?.Controller, false);
+        var controller = GetScreenshotController(false);
+        using var buffer = GetImage(controller, false);
         return buffer?.ToBitmap();
     }
 
     public void PostScreencap()
     {
-        var controller = MaaTasker?.Controller;
+        var controller = GetScreenshotController(false);
         if (controller == null)
             return;
 
@@ -338,9 +423,8 @@ public class MaaProcessor
 
     public MaaImageBuffer? GetLiveViewBuffer(bool test = true)
     {
-        if (test)
-            TryConnectAsync(CancellationToken.None);
-        return GetImage(MaaTasker?.Controller, false);
+        var controller = GetScreenshotController(test);
+        return GetImage(controller, false);
     }
 
     /// <summary>
@@ -385,6 +469,159 @@ public class MaaProcessor
     #endregion
 
     #region MaaTasker初始化
+
+    private async Task<IMaaController?> InitializeScreenshotControllerAsync(CancellationToken token)
+    {
+        if (!UseSeparateScreenshotTasker)
+            return MaaTasker?.Controller;
+
+        if (Design.IsDesignMode)
+            return null;
+
+        MaaController controller = null;
+        try
+        {
+            controller = await TaskManager.RunTaskAsync(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                return InitializeController(Instances.TaskQueueViewModel.CurrentController);
+            }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
+
+            var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
+            var displayLongSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayLongSide;
+            var displayRaw = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayRaw;
+
+            if (displayLongSide != null && displayShortSide == null && displayRaw == null)
+                controller.SetOption_ScreenshotTargetLongSide(Convert.ToInt32(displayLongSide.Value));
+            if (displayShortSide != null && displayLongSide == null && displayRaw == null)
+                controller.SetOption_ScreenshotTargetShortSide(Convert.ToInt32(displayShortSide.Value));
+            if (displayRaw != null && displayShortSide == null && displayLongSide == null)
+                controller.SetOption_ScreenshotUseRawSize(displayRaw.Value);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot controller init failed: {ex.Message}");
+            try
+            {
+                controller?.Dispose();
+            }
+            catch (Exception disposeEx)
+            {
+                LoggerHelper.Warning($"Screenshot controller dispose failed: {disposeEx.Message}");
+            }
+            return null;
+        }
+        try
+        {
+            token.ThrowIfCancellationRequested();
+            var linkStatus = controller.LinkStart().Wait();
+            if (linkStatus != MaaJobStatus.Succeeded)
+            {
+                controller.Dispose();
+                return null;
+            }
+
+            return controller;
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot controller link failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private async Task<MaaTasker?> InitializeScreenshotTaskerAsync(CancellationToken token)
+    {
+        if (!UseSeparateScreenshotTasker)
+            return MaaTasker;
+
+        if (Design.IsDesignMode)
+            return null;
+
+        MaaResource? maaResource = null;
+        try
+        {
+            var currentResource = Instances.TaskQueueViewModel.CurrentResources
+                .FirstOrDefault(c => c.Name == Instances.TaskQueueViewModel.CurrentResource);
+            var resources = currentResource?.ResolvedPath ?? currentResource?.Path ?? [];
+            resources = resources.Select(Path.GetFullPath).ToList();
+
+            maaResource = await TaskManager.RunTaskAsync(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                return new MaaResource(resources);
+            }, token: token, name: "截图资源检测", catchException: true, shouldLog: false, noMessage: true);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker resource init failed: {ex.Message}");
+            return null;
+        }
+
+        MaaController controller = null;
+        try
+        {
+            controller = await TaskManager.RunTaskAsync(() =>
+            {
+                token.ThrowIfCancellationRequested();
+                return InitializeController(Instances.TaskQueueViewModel.CurrentController);
+            }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
+
+            var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
+            var displayLongSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayLongSide;
+            var displayRaw = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayRaw;
+
+            if (displayLongSide != null && displayShortSide == null && displayRaw == null)
+                controller.SetOption_ScreenshotTargetLongSide(Convert.ToInt32(displayLongSide.Value));
+            if (displayShortSide != null && displayLongSide == null && displayRaw == null)
+                controller.SetOption_ScreenshotTargetShortSide(Convert.ToInt32(displayShortSide.Value));
+            if (displayRaw != null && displayShortSide == null && displayLongSide == null)
+                controller.SetOption_ScreenshotUseRawSize(displayRaw.Value);
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker controller init failed: {ex.Message}");
+            return null;
+        }
+
+        try
+        {
+            token.ThrowIfCancellationRequested();
+
+            var tasker = new MaaTasker
+            {
+                Controller = controller,
+                Resource = maaResource,
+                Toolkit = MaaProcessor.Toolkit,
+                Global = new MaaGlobal(),
+                DisposeOptions = DisposeOptions.All,
+            };
+            
+            ConfigureScreenshotTasker(tasker);
+
+            var linkStatus = tasker.Controller?.LinkStart().Wait();
+            if (linkStatus != MaaJobStatus.Succeeded)
+            {
+                tasker.Dispose();
+                return null;
+            }
+
+            return tasker;
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Screenshot tasker init failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private void ConfigureScreenshotTasker(MaaTasker tasker)
+    {
+        var logDir = Path.Combine(AppContext.BaseDirectory, "logs", "log_screencap");
+        if (!Directory.Exists(logDir))
+            Directory.CreateDirectory(logDir);
+        tasker.Global.SetOption_LogDir(logDir);
+    }
 
     private static string ConvertPath(string path)
     {
@@ -544,7 +781,7 @@ public class MaaProcessor
             {
                 LoggerHelper.Error(e);
             }
-            
+
             // 注册内置的自定义 Action（用于内存泄漏测试）
             //tasker.Resource.Register(new Custom.MemoryLeakTestAction());
             // 获取代理配置（假设Interface在UI线程中访问）
@@ -634,64 +871,11 @@ public class MaaProcessor
                                 LoggerHelper.Info("MaaTasker exited!");
                                 _agentProcess = null;
                             };
-                            _agentProcess?.OutputDataReceived += (sender, args) =>
-                            {
-                                if (!string.IsNullOrEmpty(args.Data))
-                                {
-                                    var outData = args.Data;
-                                    try
-                                    {
-                                        outData = Regex.Replace(outData, @"\x1B\[[0-9;]*[a-zA-Z]", "");
-                                    }
-                                    catch (Exception)
-                                    {
-                                    }
 
-                                    DispatcherHelper.PostOnMainThread(() =>
-                                    {
-                                        if (TaskQueueViewModel.CheckShouldLog(outData))
-                                        {
-                                            RootView.AddLog(outData);
-                                        }
-                                        else
-                                        {
-                                            LoggerHelper.Info("agent:" + outData);
-                                        }
-                                    });
-                                }
-                            };
+                            TaskManager.RunTaskAsync(() => ReadProcessStreamAsync(_agentProcess.StandardOutput.BaseStream, HandleAgentOutputLine, token), token: token, noMessage: true);
+                            TaskManager.RunTaskAsync(() => ReadProcessStreamAsync(_agentProcess.StandardError.BaseStream, HandleAgentOutputLine, token), token: token, noMessage: true);
 
-                            _agentProcess?.ErrorDataReceived += (sender, args) =>
-                            {
-                                if (!string.IsNullOrEmpty(args.Data))
-                                {
-                                    var outData = args.Data;
-                                    try
-                                    {
-                                        outData = Regex.Replace(outData, @"\x1B\[[0-9;]*[a-zA-Z]", "");
-                                    }
-                                    catch (Exception)
-                                    {
-                                    }
-
-                                    DispatcherHelper.PostOnMainThread(() =>
-                                    {
-                                        if (TaskQueueViewModel.CheckShouldLog(outData))
-                                        {
-                                            RootView.AddLog(outData);
-                                        }
-                                        else
-                                        {
-                                            LoggerHelper.Info("agent:" + outData);
-                                        }
-                                    });
-                                }
-                            };
-                            _agentProcess?.BeginOutputReadLine();
-                            _agentProcess?.BeginErrorReadLine();
-                            if (_agentProcess != null)
-                                TaskManager.RunTaskAsync(async () => await _agentProcess.WaitForExitAsync(token), token: token, name: "Agent程序启动");
-
+                            TaskManager.RunTaskAsync(async () => await _agentProcess.WaitForExitAsync(token), token: token, name: "Agent程序启动");
                         }
                         return _agentProcess;
                     };
@@ -872,7 +1056,16 @@ public class MaaProcessor
                 {
                     RootView.AddLogByKey(LangKeys.AgentStartFailed, Brushes.OrangeRed, changeColor: false);
                     LoggerHelper.Error(ex);
-                    ToastHelper.Error(LangKeys.AgentStartFailed.ToLocalization(), ex.Message);
+                    var isNullReference = ex is NullReferenceException
+                                          || ex.Message.Contains("Object reference not set to an instance of an object.", StringComparison.OrdinalIgnoreCase);
+                    if (isNullReference)
+                    {
+                        ToastHelper.Error(LangKeys.AgentStartFailed.ToLocalization());
+                    }
+                    else
+                    {
+                        ToastHelper.Error(LangKeys.AgentStartFailed.ToLocalization(), ex.Message);
+                    }
                     SafeKillAgentProcess();
                     ShouldRetry = false; // Agent 启动失败不应该重连
                     return (null, InvalidResource, ShouldRetry);
@@ -1633,7 +1826,7 @@ public class MaaProcessor
 
     async static Task MeasureExecutionTimeAsync(Func<Task> methodToMeasure)
     {
-        const int sampleCount = 4;
+        const int sampleCount = 2;
         long totalElapsed = 0;
 
         long min = 10000;
@@ -1677,6 +1870,154 @@ public class MaaProcessor
     public async Task ReconnectByAdb()
     {
         await ProcessHelper.ReconnectByAdbAsync(Config.AdbDevice.AdbPath, Config.AdbDevice.AdbSerial);
+    }
+
+    private static void EnsureEncodingProviders()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+    }
+
+    private static readonly Encoding Utf8Strict = new UTF8Encoding(false, true);
+    private static readonly Lazy<Encoding> GbkEncoding = new(() =>
+    {
+        EnsureEncodingProviders();
+        return Encoding.GetEncoding(936);
+    });
+    private static readonly Lazy<Encoding> Gb2312Encoding = new(() =>
+    {
+        EnsureEncodingProviders();
+        return Encoding.GetEncoding(936);
+    });
+    private static readonly Lazy<Encoding> Gb18030Encoding = new(() =>
+    {
+        EnsureEncodingProviders();
+        return Encoding.GetEncoding(54936);
+    });
+    private static readonly Lazy<Encoding> Big5Encoding = new(() =>
+    {
+        EnsureEncodingProviders();
+        return Encoding.GetEncoding(950);
+    });
+
+    private static string DecodeProcessLine(byte[] buffer)
+    {
+        try
+        {
+            return Utf8Strict.GetString(buffer);
+        }
+        catch (DecoderFallbackException)
+        {
+        }
+
+        try
+        {
+            return Gb18030Encoding.Value.GetString(buffer);
+        }
+        catch (DecoderFallbackException)
+        {
+        }
+
+        try
+        {
+            return GbkEncoding.Value.GetString(buffer);
+        }
+        catch (DecoderFallbackException)
+        {
+        }
+
+        try
+        {
+            return Gb2312Encoding.Value.GetString(buffer);
+        }
+        catch (DecoderFallbackException)
+        {
+        }
+
+        return Big5Encoding.Value.GetString(buffer);
+    }
+
+    private static async Task ReadProcessStreamAsync(Stream stream, Action<string> onLine, CancellationToken token)
+    {
+        EnsureEncodingProviders();
+
+        var readBuffer = new byte[4096];
+        var lineBuffer = new List<byte>();
+
+        while (!token.IsCancellationRequested)
+        {
+            int bytesRead;
+            try
+            {
+                bytesRead = await stream.ReadAsync(readBuffer.AsMemory(0, readBuffer.Length), token);
+            }
+            catch (OperationCanceledException)
+            {
+                break;
+            }
+
+            if (bytesRead <= 0)
+                break;
+
+            for (int i = 0; i < bytesRead; i++)
+            {
+                var value = readBuffer[i];
+                if (value == (byte)'\n')
+                {
+                    if (lineBuffer.Count > 0 && lineBuffer[^1] == (byte)'\r')
+                    {
+                        lineBuffer.RemoveAt(lineBuffer.Count - 1);
+                    }
+
+                    if (lineBuffer.Count > 0)
+                    {
+                        var text = DecodeProcessLine(lineBuffer.ToArray());
+                        onLine(text);
+                        lineBuffer.Clear();
+                    }
+                    else
+                    {
+                        onLine(string.Empty);
+                    }
+                }
+                else
+                {
+                    lineBuffer.Add(value);
+                }
+            }
+        }
+
+        if (lineBuffer.Count > 0)
+        {
+            var text = DecodeProcessLine(lineBuffer.ToArray());
+            onLine(text);
+        }
+    }
+
+    private static void HandleAgentOutputLine(string? line)
+    {
+        if (string.IsNullOrEmpty(line))
+            return;
+
+        var outData = line;
+        try
+        {
+            outData = Regex.Replace(outData, @"\x1B\[[0-9;]*[a-zA-Z]", "");
+        }
+        catch (Exception)
+        {
+        }
+
+        DispatcherHelper.PostOnMainThread(() =>
+        {
+            if (TaskQueueViewModel.CheckShouldLog(outData))
+            {
+                RootView.AddLog(outData);
+            }
+            else
+            {
+                LoggerHelper.Info("agent:" + outData);
+            }
+        });
     }
 
 
@@ -1884,7 +2225,7 @@ public class MaaProcessor
             StartTask(tasks, onlyStart, checkUpdate);
         }
     }
-    
+
     public CancellationTokenSource? CancellationTokenSource
     {
         get;
@@ -2178,8 +2519,15 @@ public class MaaProcessor
 
     public async Task MeasureScreencapPerformanceAsync(CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
-        await MeasureExecutionTimeAsync(async () => await TaskManager.RunTaskAsync(() => MaaTasker?.Controller.Screencap().Wait(), token: token, name: "截图测试"));
+        await TaskManager.RunTaskAsync(async () =>
+        {
+            token.ThrowIfCancellationRequested();
+            await MeasureExecutionTimeAsync(async () =>
+            {
+                token.ThrowIfCancellationRequested();
+                MaaTasker?.Controller.Screencap().Wait();
+            });
+        }, token: token, name: "截图测试");
     }
 
     async private Task HandleDeviceConnectionAsync(CancellationToken token, bool showMessage = true)

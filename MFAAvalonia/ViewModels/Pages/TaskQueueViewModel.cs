@@ -214,6 +214,15 @@ public partial class TaskQueueViewModel : ViewModelBase
             return;
         }
 
+        if (CurrentController == MaaControllerTypes.Adb
+            && CurrentDevice is AdbDeviceInfo adbInfo
+            && string.IsNullOrWhiteSpace(adbInfo.AdbSerial))
+        {
+            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.AdbAddressEmpty.ToLocalization());
+            LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
+            return;
+        }
+
         if (CurrentController == MaaControllerTypes.PlayCover
             && string.IsNullOrWhiteSpace(MaaProcessor.Config.PlayCover.PlayCoverAddress))
         {
@@ -798,6 +807,15 @@ public partial class TaskQueueViewModel : ViewModelBase
             return;
         }
 
+        if (CurrentController == MaaControllerTypes.Adb
+            && CurrentDevice is AdbDeviceInfo adbInfo
+            && string.IsNullOrWhiteSpace(adbInfo.AdbSerial))
+        {
+            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.AdbAddressEmpty.ToLocalization());
+            LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
+            return;
+        }
+
         if (CurrentController == MaaControllerTypes.PlayCover
             && string.IsNullOrWhiteSpace(MaaProcessor.Config.PlayCover.PlayCoverAddress))
         {
@@ -806,9 +824,16 @@ public partial class TaskQueueViewModel : ViewModelBase
             return;
         }
 
-        using var tokenSource = new CancellationTokenSource();
-        await MaaProcessor.Instance.ReconnectAsync(tokenSource.Token);
-        await MaaProcessor.Instance.TestConnecting();
+        try
+        {
+            using var tokenSource = new CancellationTokenSource();
+            await MaaProcessor.Instance.ReconnectAsync(tokenSource.Token);
+            await MaaProcessor.Instance.TestConnecting();
+        }
+        catch (Exception ex)
+        {
+            LoggerHelper.Warning($"Reconnect failed: {ex.Message}");
+        }
     }
 
     [RelayCommand]
@@ -1764,8 +1789,7 @@ public partial class TaskQueueViewModel : ViewModelBase
         {
             if (value != null && value != ConfigurationManager.GetCurrentConfiguration())
             {
-                ConfigurationManager.SetDefaultConfig(value);
-                Instances.RestartApplication();
+                ConfigurationManager.SwitchConfiguration(value);
             }
         }
     }

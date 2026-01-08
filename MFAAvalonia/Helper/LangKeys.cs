@@ -19,6 +19,7 @@ public static class LangKeys
 	public static readonly string AdbName = "AdbName";
 	public static readonly string AdbPath = "AdbPath";
 	public static readonly string AdbSerial = "AdbSerial";
+	public static readonly string AdbAddressEmpty = "AdbAddressEmpty";
 	public static readonly string AddAbove = "AddAbove";
 	public static readonly string AddBelow = "AddBelow";
 	public static readonly string AddConfiguration = "AddConfiguration";
@@ -400,8 +401,12 @@ public static class LangKeys
 	public static readonly string AlphaVersion = "AlphaVersion";
 	public static readonly string UIUpdateChannel = "UIUpdateChannel";
 	public static readonly string ExportLog = "ExportLog";
+	public static readonly string ClearCache = "ClearCache";
+	public static readonly string ClearCacheSuccess = "ClearCacheSuccess";
+	public static readonly string ClearCacheFailed = "ClearCacheFailed";
 	public static readonly string Warning = "Warning";
 	public static readonly string StopTaskBeforeExportLog = "StopTaskBeforeExportLog";
+	public static readonly string StopTaskBeforeClearCache = "StopTaskBeforeClearCache";
 	public static readonly string MirrorCdkEmpty = "MirrorCdkEmpty";
 	public static readonly string ContinueRunningWhenError = "ContinueRunningWhenError";
 	public static readonly string CurrentOtherUpdatingTask = "CurrentOtherUpdatingTask";
@@ -494,8 +499,6 @@ public static class LangKeys
 	public static readonly string PlayCoverBundleIdentifier = "PlayCoverBundleIdentifier";
 	public static readonly string PlayCoverAddressEmpty = "PlayCoverAddressEmpty";
 	public static readonly string Reconnect = "Reconnect";
-    //public static readonly string CardSettings = "CardSettings";
-    //public static readonly string EnableCardSystem = "CardSettings.EnableCardSystem";
-    //public static readonly string LoginAutoPull = "CardSettings.LoginAutoPull";
-    //public static readonly string TaskCompleteAutoPull = "CardSettings.TaskCompleteAutoPull";
+	public static readonly string ResourceLayoutUpdatedTitle = "ResourceLayoutUpdatedTitle";
+	public static readonly string ResourceLayoutUpdatedContent = "ResourceLayoutUpdatedContent";
 }

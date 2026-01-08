@@ -20,14 +20,30 @@ namespace MFAAvalonia.ViewModels.Pages;
 
 public partial class SettingsViewModel : ViewModelBase
 {
+    private bool _hotkeysInitialized;
+
     protected override void Initialize()
     {
-        // 延迟加载快捷键，避免在 ViewModel 初始化阶段通过 Instances 互锁
-        Dispatcher.UIThread.Post(() =>
+        _hotKeyShowGui = MFAHotKey.Parse(GlobalConfiguration.GetValue(ConfigurationKeys.ShowGui, ""));
+        _hotKeyLinkStart = MFAHotKey.Parse(GlobalConfiguration.GetValue(ConfigurationKeys.LinkStart, ""));
+
+        DispatcherHelper.PostOnMainThread(InitializeHotkeysAfterStartup);
+    }
+
+    private void InitializeHotkeysAfterStartup()
+    {
+        if (_hotkeysInitialized)
         {
-            HotKeyShowGui = MFAHotKey.Parse(GlobalConfiguration.GetValue(ConfigurationKeys.ShowGui, ""));
-            HotKeyLinkStart = MFAHotKey.Parse(GlobalConfiguration.GetValue(ConfigurationKeys.LinkStart, ""));
-        }, DispatcherPriority.Background);
+            return;
+        }
+
+        _hotkeysInitialized = true;
+
+        SetHotKey(ref _hotKeyShowGui, _hotKeyShowGui, ConfigurationKeys.ShowGui,
+            Instances.RootViewModel.ToggleVisibleCommand);
+
+        SetHotKey(ref _hotKeyLinkStart, _hotKeyLinkStart, ConfigurationKeys.LinkStart,
+            Instances.TaskQueueViewModel.ToggleCommand);
     }
 
     #region 配置
@@ -38,8 +54,12 @@ public partial class SettingsViewModel : ViewModelBase
 
     partial void OnCurrentConfigurationChanged(string value)
     {
-        ConfigurationManager.SetDefaultConfig(value);
-        Instances.RestartApplication();
+        ConfigurationManager.SwitchConfiguration(value);
+    }
+
+    public void RefreshCurrentConfiguration()
+    {
+        SetProperty(ref _currentConfiguration, ConfigurationManager.GetCurrentConfiguration());
     }
 
     [ObservableProperty] private string _newConfigurationName = string.Empty;

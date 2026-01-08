@@ -43,7 +43,7 @@ public partial class RootViewModel : ViewModelBase
             // var minor = version.Minor >= 0 ? version.Minor : 0;
             // var patch = version.Build >= 0 ? version.Build : 0;
             // return $"v{SemVersion.Parse($"{major}.{minor}.{patch}")}";
-            return "v2.4.1-beta.3"; // Hardcoded version for now, replace with dynamic versioning later
+            return "v2.4.1"; // Hardcoded version for now, replace with dynamic versioning later
         }
     }
 
@@ -100,7 +100,7 @@ public partial class RootViewModel : ViewModelBase
     {
         IsUpdating = isUpdating;
     }
-
+    
     partial void OnIsDebugModeChanged(bool value)
     {
         if (value)

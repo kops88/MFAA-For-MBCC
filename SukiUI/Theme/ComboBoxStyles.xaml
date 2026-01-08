@@ -78,7 +78,8 @@
                                     BorderBrush="{TemplateBinding BorderBrush}"
                                     BorderThickness="{TemplateBinding BorderThickness}"
                                     Classes="Discrete"
-                                    CornerRadius="{TemplateBinding CornerRadius}">
+                                    CornerRadius="{TemplateBinding CornerRadius}"
+                                    IsAnimated="False">
                         <suki:GlassCard.Transitions>
                             <Transitions>
                                 <BrushTransition Property="BorderBrush" Duration="0:0:0.2" />
@@ -86,7 +87,7 @@
                         </suki:GlassCard.Transitions>
                         <Grid ColumnDefinitions="*,Auto">
                             <Grid.Resources>
-                                <theme:BiggestItemConverter x:Key="BigItem" />
+                                <suki:BiggestItemConverter x:Key="BigItem" />
                             </Grid.Resources>
                             <TextBlock Name="PlaceholderTextBlock"
                                        Grid.Column="0"
@@ -157,7 +158,8 @@
                                                     CornerRadius="{DynamicResource SmallCornerRadius}">
                                                 <Panel Background="{DynamicResource PopupGradientBrush}">
                                                     <suki:GlassCard Margin="-1"
-                                                                    CornerRadius="{DynamicResource SmallCornerRadius}" />
+                                                                    CornerRadius="{DynamicResource SmallCornerRadius}"
+                                                                    IsAnimated="False" />
                                                     <ScrollViewer
                                                         HorizontalScrollBarVisibility="{TemplateBinding ScrollViewer.HorizontalScrollBarVisibility}"
                                                         VerticalScrollBarVisibility="{TemplateBinding ScrollViewer.VerticalScrollBarVisibility}">
@@ -251,10 +253,10 @@
     </Style>
     <Style Selector="ComboBox.LimitWidth /template/ Popup#PART_Popup">
         <Setter Property="MinWidth"
-                Value="{calcBinding:Binding 'Bounds.Width + 30', RelativeSource={RelativeSource TemplatedParent}}" />
-
+                Value="{calcBinding:Binding 'Bounds.Width * 1.2', RelativeSource={RelativeSource TemplatedParent}}" />
+        
         <Setter Property="MaxWidth"
-                Value="{calcBinding:Binding 'Bounds.Width + 30', RelativeSource={RelativeSource TemplatedParent}}" />
+                Value="{calcBinding:Binding 'Bounds.Width * 1.2', RelativeSource={RelativeSource TemplatedParent}}" />
     </Style>
 
     <Style Selector="ComboBox:pointerover /template/ suki|GlassCard#border">

@@ -169,6 +169,18 @@ public partial class TaskQueueView : UserControl
     private static readonly ConcurrentDictionary<string, string> IntroductionsCache = new();
     private static readonly ConcurrentDictionary<string, bool> ShowCache = new();
 
+    public void ResetOptionPanels()
+    {
+        CommonPanelCache.Clear();
+        AdvancedPanelCache.Clear();
+        IntroductionsCache.Clear();
+        ShowCache.Clear();
+        CommonOptionSettings?.Children.Clear();
+        AdvancedOptionSettings?.Children.Clear();
+        Introduction.Markdown = "";
+        SetHiddenMode();
+    }
+
     private void SetMarkDown(string markDown)
     {
         Introduction.Markdown = markDown;
@@ -2247,7 +2259,7 @@ public partial class TaskQueueView : UserControl
         _liveViewTimerStarted = true;
     }
 
-    private void StopLiveViewLoop()
+    public void StopLiveViewLoop()
     {
         if (!_liveViewTimerStarted)
             return;
@@ -2267,10 +2279,11 @@ public partial class TaskQueueView : UserControl
     {
         try
         {
+            if (MaaProcessor.IsClosed)
+                return;
             if (Instances.TaskQueueViewModel.EnableLiveView && Instances.TaskQueueViewModel.IsConnected)
             {
-                if (!MaaProcessor.Instance.MaaTasker!.IsRunning)
-                    MaaProcessor.Instance.PostScreencap();
+                MaaProcessor.Instance.PostScreencap();
                 var buffer = MaaProcessor.Instance.GetLiveViewBuffer(false);
                 _ = Instances.TaskQueueViewModel.UpdateLiveViewImageAsync(buffer);
             }
@@ -2284,7 +2297,7 @@ public partial class TaskQueueView : UserControl
             // ignored
         }
     }
-    
+
     private void OnLoaded(object? sender, RoutedEventArgs e)
     {
         StartLiveViewLoop();

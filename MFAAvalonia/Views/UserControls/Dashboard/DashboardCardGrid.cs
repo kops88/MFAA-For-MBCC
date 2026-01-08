@@ -17,9 +17,11 @@ using System.Collections.Specialized;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
+using System.Text;
 using System.Threading;
-using System.Threading.Tasks;
 using Avalonia.Threading;
+using MFAAvalonia.Extensions;
 
 namespace MFAAvalonia.Views.UserControls.Dashboard;
 
@@ -688,10 +690,23 @@ public sealed class DashboardCardGrid : Panel
 
         var defaults = GetDefaultLayouts();
         var key = GetLayoutKey();
-
         var layouts = LoadConfigLayouts(defaults, key, out var hasConfigLayouts);
         var layoutMeta = LoadLayoutMeta();
-        var resourceLayout = TryLoadResourceLayout();
+        var resourceLayout = TryLoadResourceLayout(out var resourceLayoutHash);
+        var layoutHashKey = GetResourceLayoutHashKey();
+        var storedLayoutHash = ConfigurationManager.Current.GetValue(layoutHashKey, string.Empty);
+        var resourceLayoutChanged = !string.IsNullOrWhiteSpace(resourceLayoutHash)
+            && !string.Equals(resourceLayoutHash, storedLayoutHash, StringComparison.OrdinalIgnoreCase);
+
+        if (resourceLayoutChanged && resourceLayout != null)
+        {
+            ApplyResourceLayout(resourceLayout, defaults);
+            SaveLayouts();
+            ConfigurationManager.Current.SetValue(layoutHashKey, resourceLayoutHash);
+            ToastHelper.Info(LangKeys.ResourceLayoutUpdatedTitle.ToLocalization(),
+                LangKeys.ResourceLayoutUpdatedContent.ToLocalization());
+            return;
+        }
 
         if (resourceLayout == null && !hasConfigLayouts)
         {
@@ -703,6 +718,11 @@ public sealed class DashboardCardGrid : Panel
         if (!hasConfigLayouts && resourceLayout != null)
         {
             ApplyResourceLayout(resourceLayout, defaults);
+            SaveLayouts();
+            if (!string.IsNullOrWhiteSpace(resourceLayoutHash))
+            {
+                ConfigurationManager.Current.SetValue(layoutHashKey, resourceLayoutHash);
+            }
             return;
         }
 
@@ -713,10 +733,16 @@ public sealed class DashboardCardGrid : Panel
             && (layoutMeta.Rows != resourceLayout.Rows || layoutMeta.Columns != resourceLayout.Columns))
         {
             ApplyResourceLayout(resourceLayout, defaults);
+            SaveLayouts();
+            if (!string.IsNullOrWhiteSpace(resourceLayoutHash))
+            {
+                ConfigurationManager.Current.SetValue(layoutHashKey, resourceLayoutHash);
+            }
             return;
         }
 
         ApplyLayoutMeta(layoutMeta);
+        ApplyLayouts(layouts);
         ApplyLayouts(layouts);
     }
 
@@ -919,8 +945,10 @@ public sealed class DashboardCardGrid : Panel
         public Dictionary<string, LayoutCell> Cards { get; init; } = new();
     }
 
-    private ResourceLayoutDefinition? TryLoadResourceLayout()
+    private ResourceLayoutDefinition? TryLoadResourceLayout(out string? layoutHash)
     {
+        layoutHash = null;
+
         if (!TryGetResourceLayoutPath(out var layoutPath, forWrite: false) || !File.Exists(layoutPath))
         {
             return null;
@@ -929,6 +957,7 @@ public sealed class DashboardCardGrid : Panel
         try
         {
             var json = File.ReadAllText(layoutPath);
+            layoutHash = ComputeLayoutHash(json);
             var root = JObject.Parse(json);
 
             var rows = root["rows"]?.Value<int>() ?? 0;
@@ -978,6 +1007,7 @@ public sealed class DashboardCardGrid : Panel
         }
         catch
         {
+            layoutHash = null;
             return null;
         }
     }
@@ -1044,40 +1074,52 @@ public sealed class DashboardCardGrid : Panel
         }
     }
 
+    private string GetResourceLayoutHashKey()
+    {
+        return string.IsNullOrWhiteSpace(GridId)
+            ? ConfigurationKeys.DashboardCardGridResourceLayoutHash
+            : $"{ConfigurationKeys.DashboardCardGridResourceLayoutHash}.{GridId}";
+    }
+
+    private static string ComputeLayoutHash(string content)
+    {
+        var bytes = Encoding.UTF8.GetBytes(content);
+        var hash = SHA256.HashData(bytes);
+        return Convert.ToHexString(hash);
+    }
+
     private bool TryGetResourceLayoutPath(out string layoutPath, bool forWrite)
     {
         layoutPath = string.Empty;
 
-        var resourcePaths = GetCurrentResourcePaths();
-        foreach (var path in resourcePaths)
+        var resourceRoot = MaaProcessor.Resource;
+
+        if (forWrite)
         {
-            if (string.IsNullOrWhiteSpace(path))
+            if (!Directory.Exists(resourceRoot))
             {
-                continue;
+                Directory.CreateDirectory(resourceRoot);
             }
 
-            var fullPath = Path.GetFullPath(path);
-            if (forWrite && !Directory.Exists(fullPath))
-            {
-                Directory.CreateDirectory(fullPath);
-            }
+            layoutPath = Path.Combine(resourceRoot, "mfa_layout.json");
+            return true;
+        }
 
-            var candidate = Path.Combine(fullPath, "mfa_layout.json");
-            if (forWrite || File.Exists(candidate))
+        if (Directory.Exists(resourceRoot))
+        {
+            var candidate = Directory
+                .EnumerateFiles(resourceRoot, "mfa_layout.json", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .FirstOrDefault();
+
+            if (!string.IsNullOrWhiteSpace(candidate))
             {
                 layoutPath = candidate;
                 return true;
             }
         }
 
-        var fallback = Path.Combine(MaaProcessor.Resource, "mfa_layout.json");
-        if (forWrite)
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(fallback)!);
-        }
-
-        layoutPath = fallback;
-        return forWrite || File.Exists(fallback);
+        return false;
     }
 
     private static IEnumerable<string> GetCurrentResourcePaths()
@@ -1200,6 +1242,8 @@ public sealed class DashboardCardGrid : Panel
         var columns = Math.Max(1, Columns);
         var rows = Math.Max(1, Rows);
         var metrics = GetMetrics(finalSize);
+        var arrangedRects = new Dictionary<DashboardCard, Rect>();
+        Rect? maximizedRect = null;
 
         foreach (var child in Children.OfType<Control>())
         {
@@ -1229,8 +1273,10 @@ public sealed class DashboardCardGrid : Panel
                 child.Arrange(new Rect(0, 0, 0, 0));
                 continue;
             }
+            var isMaximizeVisual = card.IsMaximized
+                || (ReferenceEquals(card, _maximizedCard) && card.IsMaximizeTransitionActive);
 
-            if (card.IsMaximized)
+            if (isMaximizeVisual)
             {
                 var maxWidth = Math.Max(0, finalSize.Width - Padding.Left - Padding.Right);
                 var maxHeight = Math.Max(0, finalSize.Height - Padding.Top - Padding.Bottom);
@@ -1239,6 +1285,8 @@ public sealed class DashboardCardGrid : Panel
                 child.Arrange(arranged1);
                 UpdateLastArranged(card, rect1);
                 HandlePendingTransition(card, rect1);
+                arrangedRects[card] = arranged1;
+                maximizedRect = arranged1;
                 continue;
             }
 
@@ -1267,8 +1315,10 @@ public sealed class DashboardCardGrid : Panel
             child.Arrange(arranged);
             UpdateLastArranged(card, rect);
             HandlePendingTransition(card, rect);
+            arrangedRects[card] = arranged;
         }
 
+        ApplyMaximizeOpacityMask(maximizedRect, arrangedRects);
         ArrangeDragPreview();
         ArrangeColumnSplitters(finalSize);
         ArrangeRowSplitters(finalSize);
@@ -1470,14 +1520,8 @@ public sealed class DashboardCardGrid : Panel
         _suppressLayoutSave = true;
         _maximizedCard = card;
         _maximizedLayout = HiddenLayout.FromCard(card);
-
-        foreach (var other in Children.OfType<DashboardCard>())
-        {
-            if (!ReferenceEquals(other, card))
-            {
-                other.IsVisible = false;
-            }
-        }
+        card.IsMaximizeTransitionActive = true;
+        card.ZIndex = 100;
 
         card.IsCollapsed = false;
 
@@ -1496,7 +1540,16 @@ public sealed class DashboardCardGrid : Panel
             Math.Max(0, Bounds.Height - Padding.Top - Padding.Bottom));
 
         _suppressLayoutSave = false;
-        StartRectTransition(card, fromRect, toRect);
+        StartRectTransition(card, fromRect, toRect, () =>
+        {
+            foreach (var other in Children.OfType<DashboardCard>())
+            {
+                if (!ReferenceEquals(other, card))
+                {
+                    other.IsVisible = false;
+                }
+            }
+        });
         InvalidateMeasure();
         InvalidateArrange();
     }
@@ -1517,6 +1570,17 @@ public sealed class DashboardCardGrid : Panel
             card.IsCollapsed = _maximizedLayout.IsCollapsed;
         }
 
+        foreach (var other in Children.OfType<DashboardCard>())
+        {
+            if (!ReferenceEquals(other, card))
+            {
+                other.IsVisible = true;
+            }
+        }
+
+        card.IsMaximizeTransitionActive = true;
+        card.ZIndex = 100;
+
         var fromRect = _lastArranged.TryGetValue(card, out var last)
             ? last
             : new Rect(
@@ -1533,11 +1597,8 @@ public sealed class DashboardCardGrid : Panel
 
         StartRectTransition(card, fromRect, toRect, () =>
         {
-            foreach (var other in Children.OfType<DashboardCard>())
-            {
-                other.IsVisible = true;
-            }
-
+            card.IsMaximizeTransitionActive = false;
+            card.ZIndex = 0;
             _maximizedCard = null;
             _maximizedLayout = null;
             _suppressLayoutSave = false;
@@ -1780,7 +1841,6 @@ public sealed class DashboardCardGrid : Panel
         }
     }
 
-
     private void EnsureDragPreviewHost()
     {
         if (_dragPreviewBorder == null)
@@ -1810,6 +1870,68 @@ public sealed class DashboardCardGrid : Panel
             _isUpdatingPreviewHost = false;
         }
     }
+
+    private void ApplyMaximizeOpacityMask(Rect? maximizedRect, Dictionary<DashboardCard, Rect> arrangedRects)
+    {
+        if (maximizedRect is not { } maxRect)
+        {
+            foreach (var card in arrangedRects.Keys)
+            {
+                card.OpacityMask = null;
+            }
+            return;
+        }
+
+        foreach (var (card, rect) in arrangedRects)
+        {
+            if (card.IsMaximized || ReferenceEquals(card, _maximizedCard))
+            {
+                card.OpacityMask = null;
+                continue;
+            }
+
+            var intersection = rect.Intersect(maxRect);
+            if (intersection.Width <= 0 || intersection.Height <= 0)
+            {
+                card.OpacityMask = null;
+                continue;
+            }
+
+            var topLeft = this.TranslatePoint(intersection.Position, card);
+            var bottomRight = this.TranslatePoint(intersection.BottomRight, card);
+            if (topLeft == null || bottomRight == null)
+            {
+                card.OpacityMask = null;
+                continue;
+            }
+
+            var left = Math.Min(topLeft.Value.X, bottomRight.Value.X);
+            var top = Math.Min(topLeft.Value.Y, bottomRight.Value.Y);
+            var right = Math.Max(topLeft.Value.X, bottomRight.Value.X);
+            var bottom = Math.Max(topLeft.Value.Y, bottomRight.Value.Y);
+
+            var localIntersect = new Rect(new Point(left, top), new Point(right, bottom));
+            var cardRect = new Rect(0, 0, rect.Width, rect.Height);
+
+            var clipGeometry = new CombinedGeometry(
+                GeometryCombineMode.Exclude,
+                new RectangleGeometry(cardRect),
+                new RectangleGeometry(localIntersect));
+
+            card.OpacityMask = new DrawingBrush
+            {
+                Stretch = Stretch.None,
+                AlignmentX = AlignmentX.Left,
+                AlignmentY = AlignmentY.Top,
+                Drawing = new GeometryDrawing
+                {
+                    Brush = Brushes.White,
+                    Geometry = clipGeometry
+                }
+            };
+        }
+    }
+
 
     private void EnsureSplitters()
     {

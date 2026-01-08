@@ -15,6 +15,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:calcBinding="clr-namespace:CalcBinding;assembly=CalcBindingAva"
     xmlns:converters="clr-namespace:MFAAvalonia.Helper.Converters"
+    xmlns:avaConverters="clr-namespace:Avalonia.Data.Converters;assembly=Avalonia.Base"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:extensions="clr-namespace:MFAAvalonia.Extensions"
     xmlns:helper="clr-namespace:MFAAvalonia.Helper"
@@ -24,8 +25,7 @@
     xmlns:suki="https://github.com/kikipoulet/SukiUI"
     xmlns:windows="clr-namespace:MFAAvalonia.ViewModels.Windows"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:vm="clr-namespace:MFAAvalonia.ViewModels.UsersControls.Settings"
-    NonClientAreaContentIsHitTestVisible="True"
+    NonClientAreaContentIsHitTestVisible="True" Icon="{Binding Source={x:Static helper:IconHelper.WindowIcon}}"
     xmlns:fluent="clr-namespace:FluentIcons.Avalonia.Fluent.Markup;assembly=FluentIcons.Avalonia.Fluent">
     <suki:SukiWindow.Styles>
         <Style Selector="ToggleButton.SP:checked > PathIcon">
@@ -35,7 +35,8 @@
     <suki:SukiWindow.NonClientAreaContent>
         <StackPanel Orientation="Horizontal" Spacing="5">
             <Button HorizontalAlignment="Left" VerticalContentAlignment="Center" VerticalAlignment="Center"
-                    Classes="Basic" Cursor="Hand" Command="{Binding TryUpdateCommand}" IsHitTestVisible="True">
+                    Classes="Basic" Cursor="Hand" Command="{Binding TryUpdateCommand}" IsHitTestVisible="True"
+                    IsVisible="{Binding WindowUpdateInfo, Converter={x:Static avaConverters:StringConverters.IsNotNullOrEmpty}}">
                 <TextBlock
                     VerticalAlignment="Center"
                     Text="{Binding WindowUpdateInfo}">

@@ -27,7 +27,7 @@
                 </DockPanel>
 
                 <!-- 开关2 -->
-                <DockPanel>
+                <DockPanel IsVisible="False">
                     <ToggleSwitch DockPanel.Dock="Right"
                                   Classes="Switch"
                                   VerticalAlignment="Top" />

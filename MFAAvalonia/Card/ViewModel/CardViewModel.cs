@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using Avalonia.Media;
 using MFAAvalonia.Card.ViewModel;
 using MFAAvalonia.ViewModels;
@@ -20,7 +21,9 @@ public class CardBase
     public string Name { get; set; }
     public string ImagePath { get; set; }
     public int Index { get; set; }
-    
+
+    public List<string> CharacterName { get; set; }
+
     /// <summary>
     /// 卡牌稀有度 - 决定发光效果
     /// </summary>

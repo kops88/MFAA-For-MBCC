@@ -110,27 +110,14 @@ public class CardGlowConfig
     #region 预设配置
 
     public static CardGlowConfig Default => new();
-
-    /// <summary>
-    /// 丝绸般柔滑的流光 (适合提供的 jpeg 遮罩)
-    /// </summary>
-    public static CardGlowConfig SilkFlow => new()
-    {
-        FlowSpeed = 0.8f,
-        FlowWidth = 0.6f,
-        FlowIntensity = 0.7f,
-        SecondaryFlowSpeedMultiplier = -0.8f,
-        SecondaryFlowIntensity = 0.4f,
-        BlendMode = 1 // Screen
-    };
-
+    
     public static CardGlowConfig GoldRare => new()
     {
         FlowColor = Color.FromRgb(255, 215, 0),
         SecondaryFlowColor = Color.FromRgb(255, 180, 50),
-        FlowIntensity = 1.0f,
-        SecondaryFlowIntensity = 0.6f,
-        FlowSpeed = 0.7f,
+        FlowIntensity = 0.35f,
+        SecondaryFlowIntensity = 0.2f,
+        FlowSpeed = 0.5f,
         BlendMode = 0 // Add
     };
 
@@ -138,7 +125,9 @@ public class CardGlowConfig
     {
         FlowColor = Color.FromRgb(100, 180, 255),
         SecondaryFlowColor = Color.FromRgb(150, 200, 255),
-        FlowIntensity = 1.0f,
+        SecondaryFlowIntensity = 0.2f,
+        FlowIntensity = 0.35f,
+        FlowSpeed = 0.5f,
         BlendMode = 0
     };
 
@@ -146,7 +135,9 @@ public class CardGlowConfig
     {
         FlowColor = Color.FromRgb(200, 100, 255),
         SecondaryFlowColor = Color.FromRgb(180, 120, 255),
-        FlowIntensity = 1.1f,
+        SecondaryFlowIntensity = 0.2f,
+        FlowIntensity = 0.35f,
+        FlowSpeed = 0.5f,
         BlendMode = 0
     };
 

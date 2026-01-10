@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     d:DesignHeight="450"
     d:DesignWidth="800"
     mc:Ignorable="d"
@@ -17,6 +17,7 @@
     xmlns:calcBinding="clr-namespace:CalcBinding;assembly=CalcBindingAva"
     xmlns:maa="clr-namespace:MFAAvalonia.Extensions.MaaFW">
     <StackPanel Spacing="25">
+        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.StartupSettings}}" FontSize="20" FontWeight="Bold" Margin="0,0,0,10"/>
         <suki:GlassCard Padding="25">
             <StackPanel Spacing="8">
                 <DockPanel>

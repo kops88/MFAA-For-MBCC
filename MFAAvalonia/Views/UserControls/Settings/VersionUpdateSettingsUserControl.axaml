@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     d:DesignHeight="450"
     d:DesignWidth="800"
     mc:Ignorable="d"
@@ -20,6 +20,7 @@
         <settings:VersionUpdateSettingsUserControlModel />
     </Design.DataContext>
     <StackPanel Spacing="15">
+        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.UpdateSettings}}" FontSize="20" FontWeight="Bold" Margin="0,0,0,10"/>
         <suki:GlassCard Padding="25,15,25,15">
             <StackPanel Spacing="20">
                 <DockPanel>

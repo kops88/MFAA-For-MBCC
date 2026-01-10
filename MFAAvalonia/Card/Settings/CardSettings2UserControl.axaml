@@ -4,10 +4,12 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:suki="https://github.com/kikipoulet/SukiUI"
              xmlns:vm="clr-namespace:MFAAvalonia.ViewModels.Windows"
+             xmlns:converters="clr-namespace:Avalonia.Data.Converters;assembly=Avalonia.Base"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:DataType="vm:RootViewModel"
              x:Class="MFAAvalonia.Views.UserControls.Settings.CardSettings2UserControl">
     <StackPanel Spacing="25">
+        <TextBlock Text="卡片设置" FontSize="20" FontWeight="Bold" Margin="0,0,0,10"/>
         <suki:GlassCard Padding="25">
             <StackPanel Spacing="20">
                 <!-- 开关1 -->
@@ -19,28 +21,73 @@
                     <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
                         <TextBlock FontSize="16" FontWeight="SemiBold"
                                    Text="启用卡片功能" />
-                        <TextBlock Foreground="{DynamicResource SukiLowText}"
-                                   Margin="0,8,70,0"
-                                   Text=""
-                                   TextWrapping="Wrap" />
+                        
                     </StackPanel>
                 </DockPanel>
-
-                <!-- 开关2 -->
-                <DockPanel IsVisible="False">
+                <!-- 开启卡面特效 -->
+                <DockPanel>
                     <ToggleSwitch DockPanel.Dock="Right"
                                   Classes="Switch"
+                                  IsChecked="{Binding EnableCardEffect, Mode=TwoWay}"
                                   VerticalAlignment="Top" />
                     <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
                         <TextBlock FontSize="16" FontWeight="SemiBold"
-                                   Text="卡片自定义位置" />
-                        <TextBlock Foreground="{DynamicResource SukiLowText}"
-                                   Margin="0,8,70,0"
-                                   Text="允许卡片拖到任意位置"
-                                   TextWrapping="Wrap" />
+                                   Text="卡面特效" />
                     </StackPanel>
+                </DockPanel>
+                <!-- 开启边框特效 -->
+                <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right"
+                                  Classes="Switch"
+                                  IsChecked="{Binding EnableBorderEffect, Mode=TwoWay}"
+                                  VerticalAlignment="Top" />
+                    <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock FontSize="16" FontWeight="SemiBold"
+                                   Text="边框特效" />
+                    </StackPanel>
+                </DockPanel>
+                <!-- 不显示相同的卡 -->
+                <DockPanel>
+                    <ToggleSwitch DockPanel.Dock="Right"
+                                  Classes="Switch"
+                                  IsChecked="{Binding EnableHideDuplicateCards, Mode=TwoWay}"
+                                  VerticalAlignment="Top" />
+                    <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <TextBlock FontSize="16" FontWeight="SemiBold"
+                                   Text="不显示相同的卡" />
+                    </StackPanel>
+                </DockPanel>
+                <!-- 输入卡片名称并校验 -->
+                <DockPanel>
+                    <Panel DockPanel.Dock="Right" VerticalAlignment="Center" Width="30" Margin="10,0,0,0">
+                        <!-- 有效信号 (绿色) -->
+                        <Border Width="20" Height="20" CornerRadius="10" Background="#4CAF50" 
+                                IsVisible="{Binding IsNeedCardNameValid, Converter={x:Static converters:ObjectConverters.Equal}, ConverterParameter={x:True}}">
+                            <Path Data="M 4,10 L 8,14 L 16,6" Stroke="White" StrokeThickness="2.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <!-- 无效信号 (红色) -->
+                        <Border Width="20" Height="20" CornerRadius="10" Background="#F44336" 
+                                IsVisible="{Binding IsNeedCardNameValid, Converter={x:Static converters:ObjectConverters.Equal}, ConverterParameter={x:False}}">
+                            <Path Data="M 6,6 L 14,14 M 14,6 L 6,14" Stroke="White" StrokeThickness="2.5" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                    </Panel>
+                    <TextBlock Text="心愿角色" FontSize="16" FontWeight="SemiBold" Margin="0 5 0 0" />
+                    <TextBox Text="{Binding NeedCardNameInput, Mode=TwoWay}" 
+                             Margin="20 0 0 0"
+                             Watermark="角色名称( 支持中文\拼音 )..."
+                             VerticalAlignment="Center"
+                             HorizontalAlignment="Left"
+                              />
                 </DockPanel>
             </StackPanel>
         </suki:GlassCard>
     </StackPanel>
 </UserControl>
+
+
+<!-- 
+<TextBlock Foreground="{DynamicResource SukiLowText}"
+                                   Margin="0,8,70,0"
+                                   Text=""
+                                   TextWrapping="Wrap" />
+-->

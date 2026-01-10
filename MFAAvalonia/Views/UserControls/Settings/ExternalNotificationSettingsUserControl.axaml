@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     d:DesignHeight="450"
     d:DesignWidth="800"
     mc:Ignorable="d"
@@ -19,6 +19,7 @@
         <settings:ExternalNotificationSettingsUserControlModel />
     </Design.DataContext>
     <StackPanel Spacing="5">
+        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.ExternalNotificationSettings}}" FontSize="20" FontWeight="Bold" Margin="0,0,0,10"/>
         <suki:GlassCard IsVisible="{calcBinding:Binding 'EnabledExternalNotificationProviderCount > 0'}"
                         Padding="25,7,25,7">
             <StackPanel Spacing="8">

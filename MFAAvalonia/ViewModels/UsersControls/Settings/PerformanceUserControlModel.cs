@@ -1,4 +1,4 @@
-﻿using Avalonia.Collections;
+using Avalonia.Collections;
 using CommunityToolkit.Mvvm.ComponentModel;
 using MaaFramework.Binding;
 using MFAAvalonia.Configuration;
@@ -25,8 +25,7 @@ public partial class PerformanceUserControlModel : ViewModelBase
     protected override void Initialize()
     {
         _gpuInitCompleted = false;
-        _gpuOption = GpuOptions[GpuIndex].Other;
-        OnPropertyChanged(nameof(GpuOption));
+        GpuOption = GpuOptions[GpuIndex].Other;
         _gpuInitCompleted = true;
         base.Initialize();
     }

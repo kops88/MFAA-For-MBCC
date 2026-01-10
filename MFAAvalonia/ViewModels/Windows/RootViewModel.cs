@@ -5,6 +5,7 @@ using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
+using MFAAvalonia.Utilities.CardClass;
 using SukiUI.Dialogs;
 using System;
 using System.Linq;
@@ -16,11 +17,34 @@ public partial class RootViewModel : ViewModelBase
     protected override void Initialize()
     {
         CheckDebug();
+        // 初始化时校验一次保存的卡片名称
+        if (!string.IsNullOrEmpty(NeedCardNameInput))
+        {
+            IsNeedCardNameValid = CCMgr.Instance.IsCardNameValid(NeedCardNameInput);
+        }
     }
 
     [ObservableProperty] private bool _idle = true;
     [ObservableProperty] private bool _isWindowVisible = true;
     [ObservableProperty] private bool _enableCardSystem = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCardSystem, true);
+    [ObservableProperty] private bool _enableCardEffect = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCardEffect, true);
+    [ObservableProperty] private bool _enableBorderEffect = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableBorderEffect, true);
+    [ObservableProperty] private bool _enableHideDuplicateCards = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableHideDuplicateCards, false);
+
+    partial void OnEnableCardEffectChanged(bool value)
+    {
+        ConfigurationManager.Current.SetValue(ConfigurationKeys.EnableCardEffect, value);
+    }
+
+    partial void OnEnableBorderEffectChanged(bool value)
+    {
+        ConfigurationManager.Current.SetValue(ConfigurationKeys.EnableBorderEffect, value);
+    }
+
+    partial void OnEnableHideDuplicateCardsChanged(bool value)
+    {
+        ConfigurationManager.Current.SetValue(ConfigurationKeys.EnableHideDuplicateCards, value);
+    }
 
     partial void OnEnableCardSystemChanged(bool value)
     {
@@ -69,6 +93,26 @@ public partial class RootViewModel : ViewModelBase
         || ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false);
     private bool _shouldTip = true;
     [ObservableProperty] private bool _isUpdating;
+
+    [ObservableProperty] private string _needCardNameInput = ConfigurationManager.Current.GetValue(ConfigurationKeys.NeedCardName, string.Empty);
+    [ObservableProperty] private bool? _isNeedCardNameValid = null;
+
+    partial void OnNeedCardNameInputChanged(string value)
+    {
+        ConfigurationManager.Current.SetValue(ConfigurationKeys.NeedCardName, value ?? string.Empty);
+        var trimmed = value?.Trim() ?? string.Empty;
+        
+        if (string.IsNullOrEmpty(trimmed))
+        {
+            IsNeedCardNameValid = null;
+            CCMgr.Instance.IsCardNameValid(string.Empty); // Reset CCMgr state
+        }
+        else
+        {
+            // 使用 CCMgr 提供的逻辑判定文本是否有效（即卡片名称是否存在）
+            IsNeedCardNameValid = CCMgr.Instance.IsCardNameValid(trimmed);
+        }
+    }
     
     [RelayCommand]
     private void TryUpdate()

@@ -27,6 +27,15 @@ public class CardBorderRenderer : Control
     public static bool UseSimpleRender { get; set; } = false;
     // ==========================================
 
+    public static readonly StyledProperty<bool> IsEffectEnabledProperty =
+        AvaloniaProperty.Register<CardBorderRenderer, bool>(nameof(IsEffectEnabled), defaultValue: true);
+
+    public bool IsEffectEnabled
+    {
+        get => GetValue(IsEffectEnabledProperty);
+        set => SetValue(IsEffectEnabledProperty, value);
+    }
+
     private CompositionCustomVisual? _customVisual;
     private CardBorderDraw? _visualHandler;
     private bool _inViewport = true;
@@ -103,7 +112,7 @@ vec4 main(vec2 fragCoord) {
     float edgePos = getEdgePosition(uv);
     
     // 流光位置 (随时间移动)
-    float flowSpeed = 0.8;  // 流光速度
+    float flowSpeed = 0.25;  // 流光速度
     float flowPos = fract(iTime * flowSpeed);  // 0~1循环
     
     // 流光宽度和强度
@@ -132,18 +141,25 @@ vec4 main(vec2 fragCoord) {
     
     // 合成边框颜色
     vec3 borderColor = baseColor;
-    borderColor = mix(borderColor, flowColor2, flowIntensity2);
-    borderColor = mix(borderColor, flowColor, flowIntensity);
     
-    // 边缘微光效果
-    float edgeGlow = smoothstep(adjustedBorderWidth * 1.5, 0.0, abs(dist)) * 0.15;
-    vec3 glowColor = vec3(0.2, 0.2, 0.25) + flowColor * flowIntensity * 0.3;
+    if (iEffectEnabled > 0.5) {
+        borderColor = mix(borderColor, flowColor2, flowIntensity2);
+        borderColor = mix(borderColor, flowColor, flowIntensity);
+    }
     
     // 最终颜色
-    vec3 finalColor = borderColor * inBorder + glowColor * edgeGlow * (1.0 - inBorder * 0.5);
-    float alpha = (inBorder + edgeGlow * 0.5) * iAlpha;
+    vec3 finalColor = borderColor * inBorder;
     
-    return vec4(finalColor, alpha);
+    // 如果启用特效，添加边缘微光
+    if (iEffectEnabled > 0.5) {
+        float edgeGlow = smoothstep(adjustedBorderWidth * 1.5, 0.0, abs(dist)) * 0.15;
+        vec3 glowColor = vec3(0.2, 0.2, 0.25) + flowColor * flowIntensity * 0.3;
+        finalColor += glowColor * edgeGlow * (1.0 - inBorder * 0.8);
+        float alpha = (inBorder + edgeGlow * 0.3) * iAlpha;
+        return vec4(finalColor, alpha);
+    }
+    
+    return vec4(finalColor, inBorder * iAlpha);
 }
 ";
 
@@ -184,6 +200,10 @@ vec4 main(vec2 fragCoord) {
         {
             UpdateAnimationState();
         }
+        else if (change.Property == IsEffectEnabledProperty)
+        {
+            _customVisual?.SendHandlerMessage(change.GetNewValue<bool>() ? CardBorderDraw.EnableEffect : CardBorderDraw.DisableEffect);
+        }
     }
 
     private void InitializeVisual()
@@ -197,6 +217,9 @@ vec4 main(vec2 fragCoord) {
         
         UpdateVisualSize();
         UpdateAnimationState();
+
+        // 设置初始特效状态
+        _customVisual.SendHandlerMessage(IsEffectEnabled ? CardBorderDraw.EnableEffect : CardBorderDraw.DisableEffect);
     }
 
     private void CleanupResources()
@@ -231,9 +254,12 @@ vec4 main(vec2 fragCoord) {
         {
             public static readonly object StartAnimations = new();
             public static readonly object StopAnimations = new();
+            public static readonly object EnableEffect = new();
+            public static readonly object DisableEffect = new();
 
             private readonly Stopwatch _animationTick = new();
             private bool _animationEnabled;
+            private bool _effectEnabled = true;
             private double _lastInvalidateSeconds;
             private double _width;
             private double _height;
@@ -253,6 +279,7 @@ vec4 main(vec2 fragCoord) {
                     var shaderCode = @"
 uniform float iTime;
 uniform float iAlpha;
+uniform float iEffectEnabled;
 uniform vec3 iResolution;
 " + BorderShaderCode;
                     
@@ -293,6 +320,16 @@ uniform vec3 iResolution;
                 {
                     _animationEnabled = false;
                     _animationTick.Stop();
+                }
+                else if (message == EnableEffect)
+                {
+                    _effectEnabled = true;
+                    Invalidate();
+                }
+                else if (message == DisableEffect)
+                {
+                    _effectEnabled = false;
+                    Invalidate();
                 }
             }
 
@@ -356,6 +393,7 @@ uniform vec3 iResolution;
                             {
                                 { "iTime", (float)_animationTick.Elapsed.TotalSeconds },
                                 { "iAlpha", 1.0f },
+                                { "iEffectEnabled", _effectEnabled ? 1.0f : 0.0f },
                                 { "iResolution", _resolutionAlloc }
                             };
 

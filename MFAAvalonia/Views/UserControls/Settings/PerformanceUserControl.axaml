@@ -1,4 +1,4 @@
-﻿<UserControl
+<UserControl
     d:DesignHeight="450"
     d:DesignWidth="800"
     mc:Ignorable="d"
@@ -16,7 +16,9 @@
     <Design.DataContext>
         <settings:PerformanceUserControlModel />
     </Design.DataContext>
-    <suki:GlassCard Margin="0,15,0,0" Padding="25,10,25,10">
+    <StackPanel>
+        <TextBlock Text="{markup:I18n {x:Static helper:LangKeys.PerformanceSettings}}" FontSize="20" FontWeight="Bold" Margin="0,0,0,10"/>
+        <suki:GlassCard Margin="0,15,0,0" Padding="25,10,25,10">
         <StackPanel Orientation="Vertical" Spacing="10">
             <DockPanel>
 
@@ -43,4 +45,5 @@
             </CheckBox>
         </StackPanel>
     </suki:GlassCard>
+    </StackPanel>
 </UserControl>

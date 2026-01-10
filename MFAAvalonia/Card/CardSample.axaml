@@ -4,6 +4,7 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:card="clr-namespace:MFAAvalonia.Views.UserControls.Card"
+             xmlns:helper="clr-namespace:MFAAvalonia.Helper"
              mc:Ignorable="d" d:DesignWidth="800" d:DesignHeight="450"
              x:Name="Root"
              x:Class="MFAAvalonia.Views.UserControls.Card.CardSample"
@@ -19,12 +20,17 @@
         Width="{Binding CardWidth, RelativeSource={RelativeSource AncestorType=card:CardSample}}"
         Height="{Binding CardHeight, RelativeSource={RelativeSource AncestorType=card:CardSample}}">
 
+        <!-- 背景底色层：带圆角，用于消除缝隙并保持外部透明 -->
+        <Border Background="Black" 
+                CornerRadius="16" 
+                Margin="8" />
+
         <!-- 普通卡牌图片层 (当不启用发光时显示) -->
 
         <Image x:Name="Image"
                Source="{Binding CardImage}"
                Stretch="UniformToFill"
-               Margin="8"
+               Margin="7"
                />
         
         <!-- 发光效果卡牌层 (当启用发光时显示) -->
@@ -32,11 +38,12 @@
                                Source="{Binding CardImage}"
                                Config="{Binding GlowConfig}"
                                IsGlowEnabled="{Binding EnableGlow}"
-                               Margin="8"
-                               IsVisible="{Binding EnableGlow}" />
+                               IsVisible="{Binding EnableCardEffect, Source={x:Static helper:Instances.RootViewModel}}"
+                               Margin="7"
+                                />
         
         <!-- Shader边框效果层 -->
-        <card:CardBorderRenderer />
+        <card:CardBorderRenderer IsEffectEnabled="{Binding EnableBorderEffect, Source={x:Static helper:Instances.RootViewModel}}" />
 
         <TextBlock Text="abcde"
                    Name="mtest"

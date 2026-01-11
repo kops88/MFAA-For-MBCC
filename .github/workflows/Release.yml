@@ -119,8 +119,16 @@ jobs:
         env:
           NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
+      - name: Rename Assembly for Release
+        shell: bash
+        run: |
+          echo "Renaming assembly references from MFAAvalonia to MBCC小助手..."
+          # Replace avares://MFAAvalonia with avares://MBCC小助手 in all .axaml and .cs files
+          find . -type f \( -name "*.axaml" -o -name "*.cs" \) -exec sed -i 's|avares://MFAAvalonia|avares://MBCC小助手|g' {} +
+          echo "Rename complete."
+
       - name: Build Solution
-        run: dotnet publish -c Release -r ${{ matrix.platform }}-${{ matrix.arch }}
+        run: dotnet publish -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -p:AssemblyName="MBCC小助手"
 
       - name: Sign macOS App with Adhoc Certificate
         if: ${{ matrix.is_macos == true }} 
@@ -131,12 +139,12 @@ jobs:
             
           # 对主程序和相关可执行文件进行adhoc签名（-s - 表示使用adhoc签名）
           # 签名所有可执行文件（包括应用程序和更新器）
-          find . -type f -name "MFAAvalonia*" -exec codesign -s - --force --deep {} \;
+          find . -type f -name "MBCC小助手*" -exec codesign -s - --force --deep {} \;
           find . -type f -name "MFAUpdater*" -exec codesign -s - --force --deep {} \;
             
           # 验证签名是否成功
           echo "验证签名结果："
-          find . -type f -name "MFAAvalonia*" -exec codesign -v {} \;
+          find . -type f -name "MBCC小助手*" -exec codesign -v {} \;
         shell: bash
         
       - name: Unified ZIP Packaging
@@ -202,9 +210,9 @@ jobs:
               unzip -q *.zip
               rm *.zip
               
-              # Set execute permissions for MFAAvalonia
-              find . -type f -name "MFAAvalonia*" -exec chmod +x {} \; 2>/dev/null || true
-              echo "Set execute permission for all MFAAvalonia files"
+              # Set execute permissions for MBCC小助手
+              find . -type f -name "MBCC小助手*" -exec chmod +x {} \; 2>/dev/null || true
+              echo "Set execute permission for all MBCC小助手 files"
               
               # Set execute permissions for MFAUpdater
               find . -type f -name "MFAUpdater*" -exec chmod +x {} \; 2>/dev/null || true

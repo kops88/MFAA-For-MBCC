@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 
 <root>
     <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema"
@@ -1500,5 +1500,17 @@
         <value>检测到资源布局文件更新，已应用最新布局并覆盖当前布局。</value>
     </data>
 
+    <data name="CardSettings" xml:space="preserve">
+        <value>卡片设置</value>
+    </data>
+    <data name="CardSettings.EnableCardSystem" xml:space="preserve">
+        <value>启用卡片功能</value>
+    </data>
+    <data name="CardSettings.LoginAutoPull" xml:space="preserve">
+        <value>登录自动抽卡</value>
+    </data>
+    <data name="CardSettings.TaskCompleteAutoPull" xml:space="preserve">
+        <value>运行完抽卡</value>
+    </data>
 </root>
 

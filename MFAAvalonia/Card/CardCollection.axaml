@@ -1,0 +1,103 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d" d:DesignWidth="1600" d:DesignHeight="850"
+             xmlns:local="using:MFAAvalonia.Views.UserControls.Card"
+             xmlns:vm="clr-namespace:MFAAvalonia.ViewModels.Pages"
+             xmlns:i="using:Avalonia.Xaml.Interactivity"
+             xmlns:cardClass="clr-namespace:MFAAvalonia.Utilities.CardClass"
+             xmlns:conv="using:MFAAvalonia.Helper.Converters"
+             x:DataType="vm:CardCollectionViewModel"
+             x:Name="PageRoot"
+             x:Class="MFAAvalonia.Views.Pages.CardCollection">
+        <!-- -->
+    <Grid Name="CCWindow">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+        
+        <!-- 主内容区域 -->
+        <Grid Grid.Row="0">
+            <ScrollViewer x:Name="CardScrollViewer"
+                          Background="Transparent"
+                          PointerReleased="ClickBlankSpace">
+                <!-- 绑定显示源 -->
+                <ItemsRepeater ItemsSource="{Binding PlayerCards}">
+                    <ItemsRepeater.Layout>
+                        <WrapLayout Orientation="Horizontal" />
+                    </ItemsRepeater.Layout>
+                    <ItemsRepeater.ItemTemplate>
+                        <DataTemplate x:DataType="cardClass:CardViewModel">
+                            <!-- 这里的 DataContext 自动变成了单个 CardViewModel -->
+                            <local:CardSample 
+                                Margin="5">
+                            </local:CardSample>
+                        </DataTemplate>
+                    </ItemsRepeater.ItemTemplate>
+                </ItemsRepeater>
+            </ScrollViewer>
+            
+            <!-- 细节栏 -->
+            <Grid HorizontalAlignment="{Binding Hori}"
+                  Margin="0, 20, 0, 20"
+                  Width="{Binding DetailWidth}"
+                  Height="{Binding DetailHeight}"
+                  IsVisible="{Binding IsOpenDetail}">
+                
+                <Grid.Styles>
+                    <Style Selector="Border.glowPulse">
+                        <Style.Animations>
+                            <Animation Duration="0:0:2" IterationCount="Infinite">
+                                <KeyFrame KeyTime="0:0:0">
+                                    <Setter Property="BoxShadow" Value="0 0 20 5 #44FFD700"/>
+                                </KeyFrame>
+                                <KeyFrame KeyTime="0:0:1">
+                                    <Setter Property="BoxShadow" Value="0 0 60 15 #AAFFD700"/>
+                                </KeyFrame>
+                                <KeyFrame KeyTime="0:0:2">
+                                    <Setter Property="BoxShadow" Value="0 0 20 5 #44FFD700"/>
+                                </KeyFrame>
+                            </Animation>
+                        </Style.Animations>
+                    </Style>
+                </Grid.Styles>
+
+                <local:CardSample 
+                    DataContext="{Binding SelectedCard}"
+                    CardWidth="{Binding #PageRoot.((vm:CardCollectionViewModel)DataContext).DetailWidth}" 
+                    CardHeight="{Binding #PageRoot.((vm:CardCollectionViewModel)DataContext).DetailHeight}"
+                    IsHitTestVisible="False"
+                    IsDragbility="False"
+                    Margin="0"/>
+            </Grid>
+
+            <!-- 测试发光卡片按钮 -->
+            <!-- 测试发光卡片按钮 -->
+            <!-- 测试发光卡片按钮 -->
+            <Button Height="50" Width="50" Background="Red"
+                    VerticalAlignment="Bottom" 
+                    HorizontalAlignment="Center"
+                    IsVisible="false"
+                    Click="PullButton_OnClick"/>
+        </Grid>
+
+        <!-- 拖动时显示的删除区域 -->
+        <Border Grid.Row="1"
+                x:Name="DeleteDropArea"
+                Background="#33FF5555"
+                Height="120"
+                IsVisible="False"
+                CornerRadius="4"
+                BorderBrush="#55FF0000"
+                BorderThickness="1">
+            <TextBlock Text="拖到此处删除"
+                       HorizontalAlignment="Center"
+                       VerticalAlignment="Center"
+                       FontWeight="Bold"
+                       Foreground="#CCFFFFFF"/>
+        </Border>
+    </Grid>
+</UserControl>
+

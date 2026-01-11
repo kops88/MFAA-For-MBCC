@@ -1,4 +1,5 @@
-﻿using Avalonia.Controls;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using MaaFramework.Binding;
 using MaaFramework.Binding.Buffers;
 using MaaFramework.Binding.Notification;
@@ -29,6 +30,7 @@ using Bitmap = Avalonia.Media.Imaging.Bitmap;
 using Brushes = Avalonia.Media.Brushes;
 using MaaAgentClient = MaaFramework.Binding.MaaAgentClient;
 using MaaController = MaaFramework.Binding.MaaController;
+using MFAAvalonia.Utilities.CardClass;
 using MaaGlobal = MaaFramework.Binding.MaaGlobal;
 using MaaResource = MaaFramework.Binding.MaaResource;
 using MaaTasker = MaaFramework.Binding.MaaTasker;
@@ -167,9 +169,25 @@ public class MaaProcessor
 
             if (value != null)
             {
-                Instances.SettingsViewModel.ShowResourceIssues = !string.IsNullOrWhiteSpace(value.Url) || !string.IsNullOrWhiteSpace(value.Github);
-                Instances.SettingsViewModel.ResourceGithub = (!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url) ?? "";
-                Instances.SettingsViewModel.ResourceIssues = $"{(!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url)}/issues";
+                // 将 VM 更新延迟到初始化完成之后，避免循环依赖导致死锁
+                Dispatcher.UIThread.Post(() =>
+                {
+                    try
+                    {
+                        Instances.SettingsViewModel.ShowResourceIssues = !string.IsNullOrWhiteSpace(value.Url) || !string.IsNullOrWhiteSpace(value.Github);
+                        Instances.SettingsViewModel.ResourceGithub = (!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url) ?? "";
+                        Instances.SettingsViewModel.ResourceIssues = $"{(!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url)}/issues";
+
+                        Instances.TaskQueueViewModel.InitializeControllerOptions();
+                        
+                        // 异步加载 Contact 和 Description 内容
+                        _ = LoadContactAndDescriptionAsync(value);
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggerHelper.Error($"[MaaProcessor] 更新 ViewModel 失败: {ex.Message}");
+                    }
+                }, DispatcherPriority.Background);
 
                 // 加载多语言配置
                 if (value.Languages is { Count: > 0 })
@@ -3314,6 +3332,26 @@ public class MaaProcessor
                 var elapsedTime = DateTime.Now - (DateTime)_startTime;
                 RootView.AddLogByKeys(LangKeys.TaskAllCompletedWithTime, null, true, ((int)elapsedTime.TotalHours).ToString(),
                     ((int)elapsedTime.TotalMinutes % 60).ToString(), ((int)elapsedTime.TotalSeconds % 60).ToString());
+                
+                        // 如果执行时间大于2分钟，触发抽卡
+                if (elapsedTime.TotalMinutes > 2)
+                {
+                    try
+                    {
+                        var enableCardSystem = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCardSystem, true);
+                        var taskCompleteAutoPull = ConfigurationManager.Current.GetValue(ConfigurationKeys.TaskCompleteAutoPull, true);
+
+                        if (enableCardSystem && taskCompleteAutoPull)
+                        {
+                            LoggerHelper.Info($"任务执行时间 {elapsedTime.TotalMinutes:F1} 分钟，触发自动抽卡");
+                            TaskManager.RunTaskAsync(async () => await CCMgr.Instance.PullOne(), null, "自动抽卡");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        LoggerHelper.Error($"自动抽卡失败: {ex.Message}");
+                    }
+                }
             }
             else
             {

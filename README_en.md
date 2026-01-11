@@ -18,6 +18,7 @@ with [Avalonia UI](https://github.com/AvaloniaUI/Avalonia)_
 ---
 
 **English** | [简体中文](./README.md)
+<<<<<<< HEAD
 
 </div>
 
@@ -393,3 +394,5 @@ Thanks to all developers who contributed to MFAAvalonia!
 </div> 
 
 
+=======
+>>>>>>> 35c27ce34dd65e42f25e790c56d1200cbeaf5a77

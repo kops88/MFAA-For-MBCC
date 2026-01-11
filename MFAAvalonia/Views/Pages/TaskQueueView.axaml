@@ -1050,6 +1050,7 @@
                              HorizontalAlignment="Stretch"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              SelectionChanged="SelectingItemsControl_OnSelectionChanged"
+                             KeyDown="TaskListBox_OnKeyDown"
                              x:Name="TaskListBox">
                         <ListBox.ItemsPanel>
                             <ItemsPanelTemplate>

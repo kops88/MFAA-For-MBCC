@@ -38,10 +38,10 @@
     <!-- Version -->
     <PropertyGroup>
         <ApplicationRevision>0</ApplicationRevision>
-        <ApplicationVersion>2.4.0</ApplicationVersion>
+        <ApplicationVersion>2.5.0</ApplicationVersion>
         <Version>1.1</Version>
-        <FileVersion>2.4.1</FileVersion>
-        <AssemblyVersion>2.4.1</AssemblyVersion>
+        <FileVersion>2.5.1</FileVersion>
+        <AssemblyVersion>2.5.1</AssemblyVersion>
         <InformationalVersion>0.0.1</InformationalVersion>
     </PropertyGroup>
 
@@ -56,7 +56,6 @@
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <PublishTrimmed>false</PublishTrimmed>
         <SelfContained>false</SelfContained>
-        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <GenerateResource>Always</GenerateResource>
         <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
         <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
@@ -107,7 +106,7 @@
         <PackageReference Include="Maa.Framework.Binding.Extensions" Version="5.3.0-preview.1" />
         <PackageReference Include="Maa.Framework.Binding.Native" Version="5.3.0-preview.1" />
         <PackageReference Include="Maa.Framework.Native" Version="5.3.0-preview.1" />
-        <PackageReference Include="Maa.Framework.Runtimes" Version="5.3.0" />
+        <PackageReference Include="Maa.Framework.Runtimes" Version="5.3.2" />
         <PackageReference Include="MailKit" Version="4.14.1"/>
         <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="5.0.0"/>
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.0.0"/>
@@ -138,6 +137,7 @@
         <PackageReference Include="System.Private.Uri" Version="4.3.2"/>
         <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.0"/>
         <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.6.3"/>
+        <PackageReference Include="WindowsAPICodePack" Version="8.0.14" />
 
         <ProjectReference Include="../LazyStaticGenerator/LazyStaticGenerator.csproj" OutputItemType="Analyzer" ExcludeAssets="runtime;build;native;contentfiles" ReferenceOutputAssembly="false"/>
         <ProjectReference Include="../SukiUI/SukiUI.csproj"/>
@@ -198,14 +198,21 @@
         <Content Include="..\docs\en\external-notification.md">
           <Link>docs\en\external-notification.md</Link>
         </Content>
+        <Content Include="..\docs\images\maa-logo_512x512.png">
+          <Link>docs\images\maa-logo_512x512.png</Link>
+        </Content>
+        <Content Include="..\docs\images\preview.png">
+          <Link>docs\images\preview.png</Link>
+        </Content>
         <Content Include="..\docs\zh\外部通知.md">
           <Link>docs\zh\外部通知.md</Link>
         </Content>
         <Content Include="..\README_en.md">
             <Link>README_en.md</Link>
         </Content>
-        <Content Include="Assets/logo.ico" CopyToPublishDirectory="PreserveNewest">
+        <Content Include="Assets/logo.ico">
             <LinuxPath>/usr/share/icons/MFAAvalonia.ico</LinuxPath>
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </Content>
     </ItemGroup>
     <ItemGroup>

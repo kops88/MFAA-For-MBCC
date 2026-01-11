@@ -9,6 +9,7 @@ using MFAAvalonia.Helper.ValueType;
 using MFAAvalonia.Helper.Converters;
 using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.Views.Windows;
+using Microsoft.WindowsAPICodePack.Taskbar;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using System;
@@ -42,6 +43,7 @@ public class MaaProcessor
     #region 属性
 
     private static Random Random = new();
+    private int _taskQueueTotal;
     public static string Resource => Path.Combine(AppContext.BaseDirectory, "resource");
     public static string ResourceBase => Path.Combine(Resource, "base");
     public static MaaProcessor Instance { get; } = new();
@@ -85,6 +87,21 @@ public class MaaProcessor
         {
             if (args.NewValue > 0)
                 Instances.RootViewModel.IsRunning = true;
+
+            if (_taskQueueTotal <= 0)
+            {
+                ClearTaskbarProgress();
+                return;
+            }
+
+            var completed = _taskQueueTotal - args.NewValue;
+            SetTaskbarProgress(completed, _taskQueueTotal);
+
+            if (args.NewValue <= 0)
+            {
+                ClearTaskbarProgress();
+                _taskQueueTotal = 0;
+            }
         };
         CheckInterface(out _, out _, out _, out _, out _);
         try
@@ -226,7 +243,9 @@ public class MaaProcessor
     public static MaaFWConfiguration Config { get; } = new();
     public MaaTasker? MaaTasker { get; set; }
     private MaaTasker? _screenshotTasker;
-
+    private Task<MaaTasker?>? _screenshotTaskerInitTask;
+    private readonly Lock _screenshotTaskerInitLock = new();
+    public MaaTasker? ScreenshotTasker => _screenshotTasker;
     public void SetTasker(MaaTasker? maaTasker = null)
     {
         if (maaTasker == null && MaaTasker != null)
@@ -268,6 +287,7 @@ public class MaaProcessor
         {
             MaaTasker = maaTasker;
             DisposeScreenshotTasker();
+            ResetScreencapFailureLogFlags();
         }
     }
 
@@ -292,7 +312,7 @@ public class MaaProcessor
     }
 
     private bool UseSeparateScreenshotTasker =>
-        ConfigurationManager.Maa.GetValue(ConfigurationKeys.UseSeparateScreenshotTasker, true);
+        true;
 
     private MaaTasker? GetScreenshotTasker(CancellationToken token = default)
     {
@@ -304,9 +324,24 @@ public class MaaProcessor
 
         if (_screenshotTasker == null && !_isClosed)
         {
-            var task = InitializeScreenshotTaskerAsync(token);
-            task.Wait(token);
-            _screenshotTasker = task.Result;
+            Task<MaaTasker?> initTask;
+            lock (_screenshotTaskerInitLock)
+            {
+                _screenshotTaskerInitTask ??= InitializeScreenshotTaskerAsync(token);
+                initTask = _screenshotTaskerInitTask;
+            }
+
+            initTask.Wait(token);
+            var tasker = initTask.Result;
+
+            lock (_screenshotTaskerInitLock)
+            {
+                if (_screenshotTasker == null)
+                {
+                    _screenshotTasker = tasker;
+                }
+                _screenshotTaskerInitTask = null;
+            }
         }
 
         return _screenshotTasker;
@@ -319,6 +354,10 @@ public class MaaProcessor
 
         var screenshotTasker = _screenshotTasker;
         _screenshotTasker = null;
+        lock (_screenshotTaskerInitLock)
+        {
+            _screenshotTaskerInitTask = null;
+        }
 
         try
         {
@@ -352,6 +391,13 @@ public class MaaProcessor
     private bool _agentStarted;
     private Process? _agentProcess;
     private MFATask.MFATaskStatus Status = MFATask.MFATaskStatus.NOT_STARTED;
+    private const int ActionFailedLimit = 1;
+    private int _screencapFailedCount;
+    private readonly Lock _screencapLogLock = new();
+    private bool _screencapAbortLogPending;
+    private bool _screencapDisconnectedLogPending;
+    private bool _screencapFailureLogged;
+    private int _isConnecting;
 
     private IMaaController? GetScreenshotController(bool test)
     {
@@ -376,6 +422,8 @@ public class MaaProcessor
     public Bitmap? GetLiveView(bool test = true)
     {
         var controller = GetScreenshotController(test);
+        if (controller == null || !controller.IsConnected)
+            return null;
         using var buffer = GetImage(controller, ShouldScreencapForLiveView());
         return buffer?.ToBitmap();
     }
@@ -383,23 +431,28 @@ public class MaaProcessor
     public Bitmap? GetLiveViewCached()
     {
         var controller = GetScreenshotController(false);
+        if (controller == null || !controller.IsConnected)
+            return null;
+
         using var buffer = GetImage(controller, false);
         return buffer?.ToBitmap();
     }
 
-    public void PostScreencap()
+    public MaaJobStatus PostScreencap()
     {
         var controller = GetScreenshotController(false);
-        if (controller == null)
-            return;
+
+        if (controller == null || !controller.IsConnected)
+            return MaaJobStatus.Invalid;
 
         try
         {
-            controller.Screencap().Wait();
+            return controller.Screencap().Wait();
         }
         catch (Exception ex)
         {
             LoggerHelper.Warning($"PostScreencap failed: {ex.Message}");
+            return MaaJobStatus.Invalid;
         }
     }
 
@@ -466,7 +519,7 @@ public class MaaProcessor
             controller = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return InitializeController(Instances.TaskQueueViewModel.CurrentController);
+                return InitializeController(Instances.TaskQueueViewModel.CurrentController, logConfig: false);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
 
             var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
@@ -523,15 +576,15 @@ public class MaaProcessor
         MaaResource? maaResource = null;
         try
         {
-            var currentResource = Instances.TaskQueueViewModel.CurrentResources
-                .FirstOrDefault(c => c.Name == Instances.TaskQueueViewModel.CurrentResource);
-            var resources = currentResource?.ResolvedPath ?? currentResource?.Path ?? [];
-            resources = resources.Select(Path.GetFullPath).ToList();
+            // var currentResource = Instances.TaskQueueViewModel.CurrentResources
+            //     .FirstOrDefault(c => c.Name == Instances.TaskQueueViewModel.CurrentResource);
+            // var resources = currentResource?.ResolvedPath ?? currentResource?.Path ?? [];
+            // resources = resources.Select(Path.GetFullPath).ToList();
 
             maaResource = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return new MaaResource(resources);
+                return new MaaResource();
             }, token: token, name: "截图资源检测", catchException: true, shouldLog: false, noMessage: true);
         }
         catch (Exception ex)
@@ -546,7 +599,7 @@ public class MaaProcessor
             controller = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return InitializeController(Instances.TaskQueueViewModel.CurrentController);
+                return InitializeController(Instances.TaskQueueViewModel.CurrentController, logConfig: false);
             }, token: token, name: "截图控制器检测", catchException: true, shouldLog: false, noMessage: true);
 
             var displayShortSide = Interface?.Controller?.Find(c => c.Type != null && c.Type.Equals(Instances.TaskQueueViewModel.CurrentController.ToJsonKey(), StringComparison.OrdinalIgnoreCase))?.DisplayShortSide;
@@ -574,12 +627,19 @@ public class MaaProcessor
             {
                 Controller = controller,
                 Resource = maaResource,
-                Toolkit = MaaProcessor.Toolkit,
+                Toolkit = new MaaToolkit(),
                 Global = new MaaGlobal(),
                 DisposeOptions = DisposeOptions.All,
             };
-            
-            ConfigureScreenshotTasker(tasker);
+
+            tasker.Releasing += (_, _) =>
+            {
+                tasker.Controller.Callback -= HandleControllerCallBack;
+            };
+
+           // ConfigureScreenshotTasker(tasker);
+
+            tasker.Controller.Callback += HandleControllerCallBack;
 
             var linkStatus = tasker.Controller?.LinkStart().Wait();
             if (linkStatus != MaaJobStatus.Succeeded)
@@ -600,8 +660,9 @@ public class MaaProcessor
     private void ConfigureScreenshotTasker(MaaTasker tasker)
     {
         var logDir = Path.Combine(AppContext.BaseDirectory, "logs", "log_screencap");
-        if (!Directory.Exists(logDir))
-            Directory.CreateDirectory(logDir);
+        // if (!Directory.Exists(logDir))
+        //     Directory.CreateDirectory(logDir);
+        LoggerHelper.Info("screenlog dir:" + logDir);
         tasker.Global.SetOption_LogDir(logDir);
     }
 
@@ -692,7 +753,7 @@ public class MaaProcessor
             controller = await TaskManager.RunTaskAsync(() =>
             {
                 token.ThrowIfCancellationRequested();
-                return InitializeController(Instances.TaskQueueViewModel.CurrentController);
+                return InitializeController(Instances.TaskQueueViewModel.CurrentController, logConfig: true);
             }, token: token, name: "控制器检测", catchException: true, shouldLog: false, handleError: exception => HandleInitializationError(exception,
                 LangKeys.ConnectingEmulatorOrWindow.ToLocalization()
                     .FormatWith(Instances.TaskQueueViewModel.CurrentController == MaaControllerTypes.Adb
@@ -743,6 +804,7 @@ public class MaaProcessor
             tasker.Releasing += (_, _) =>
             {
                 tasker.Callback -= HandleCallBack;
+                tasker.Controller.Callback -= HandleControllerCallBack;
             };
 
             try
@@ -1039,7 +1101,7 @@ public class MaaProcessor
                     RootView.AddLogByKey(LangKeys.AgentStartFailed, Brushes.OrangeRed, changeColor: false);
                     LoggerHelper.Error(ex);
                     var isNullReference = ex is NullReferenceException
-                                          || ex.Message.Contains("Object reference not set to an instance of an object.", StringComparison.OrdinalIgnoreCase);
+                        || ex.Message.Contains("Object reference not set to an instance of an object.", StringComparison.OrdinalIgnoreCase);
                     if (isNullReference)
                     {
                         ToastHelper.Error(LangKeys.AgentStartFailed.ToLocalization());
@@ -1065,7 +1127,8 @@ public class MaaProcessor
             LoggerHelper.Info("Maafw debug mode: " + ConfigurationManager.Maa.GetValue(ConfigurationKeys.ShowHitDraw, false));
             // 注意：只订阅一次回调，避免嵌套订阅导致内存泄漏
             tasker.Callback += HandleCallBack;
-
+            tasker.Controller.Callback += HandleControllerCallBack;
+            ResetScreencapFailureLogFlags();
             return (tasker, InvalidResource, ShouldRetry);
         }
         catch (OperationCanceledException)
@@ -1083,10 +1146,26 @@ public class MaaProcessor
             return (null, InvalidResource, ShouldRetry);
         }
     }
-
+    public void HandleControllerCallBack(object? sender, MaaCallbackEventArgs args)
+    {
+        var message = args.Message;
+        if (message == MaaMsg.Controller.Action.Failed)
+        {
+            HandleScreencapFailure(true);
+        }
+    }
     public void HandleCallBack(object? sender, MaaCallbackEventArgs args)
     {
-        var jObject = JObject.Parse(args.Details);
+        JObject jObject;
+        try
+        {
+            jObject = JObject.Parse(args.Details);
+        }
+        catch
+        {
+            jObject = new JObject();
+        }
+
         MaaTasker? tasker = null;
         if (sender is MaaTasker t)
             tasker = t;
@@ -1207,6 +1286,7 @@ public class MaaProcessor
                 }
             }
         }
+
         if (jObject.ContainsKey("focus"))
         {
             _focusHandler ??= new FocusHandler(AutoInitDictionary);
@@ -1238,19 +1318,22 @@ public class MaaProcessor
         LoggerHelper.Error(e.ToString());
     }
 
-    private MaaController InitializeController(MaaControllerTypes controllerType)
+    private MaaController InitializeController(MaaControllerTypes controllerType, bool logConfig)
     {
-        ConnectToMAA();
+        ConnectToMAA(logConfig);
 
         switch (controllerType)
         {
             case MaaControllerTypes.Adb:
-                LoggerHelper.Info($"Name: {Config.AdbDevice.Name}");
-                LoggerHelper.Info($"AdbPath: {Config.AdbDevice.AdbPath}");
-                LoggerHelper.Info($"AdbSerial: {Config.AdbDevice.AdbSerial}");
-                LoggerHelper.Info($"ScreenCap: {Config.AdbDevice.ScreenCap}");
-                LoggerHelper.Info($"Input: {Config.AdbDevice.Input}");
-                LoggerHelper.Info($"Config: {Config.AdbDevice.Config}");
+                if (logConfig)
+                {
+                    LoggerHelper.Info($"Name: {Config.AdbDevice.Name}");
+                    LoggerHelper.Info($"AdbPath: {Config.AdbDevice.AdbPath}");
+                    LoggerHelper.Info($"AdbSerial: {Config.AdbDevice.AdbSerial}");
+                    LoggerHelper.Info($"ScreenCap: {Config.AdbDevice.ScreenCap}");
+                    LoggerHelper.Info($"Input: {Config.AdbDevice.Input}");
+                    LoggerHelper.Info($"Config: {Config.AdbDevice.Config}");
+                }
 
                 return new MaaAdbController(
                     Config.AdbDevice.AdbPath,
@@ -1261,20 +1344,26 @@ public class MaaProcessor
                 );
 
             case MaaControllerTypes.PlayCover:
-                LoggerHelper.Info($"PlayCover Address: {Config.PlayCover.PlayCoverAddress}");
-                LoggerHelper.Info($"PlayCover BundleId: {Config.PlayCover.UUID}");
+                if (logConfig)
+                {
+                    LoggerHelper.Info($"PlayCover Address: {Config.PlayCover.PlayCoverAddress}");
+                    LoggerHelper.Info($"PlayCover BundleId: {Config.PlayCover.UUID}");
+                }
 
                 return new MaaPlayCoverController(Config.PlayCover.PlayCoverAddress, Config.PlayCover.UUID);
 
             case MaaControllerTypes.Win32:
             default:
-                LoggerHelper.Info($"Name: {Config.DesktopWindow.Name}");
-                LoggerHelper.Info($"HWnd: {Config.DesktopWindow.HWnd}");
-                LoggerHelper.Info($"ScreenCap: {Config.DesktopWindow.ScreenCap}");
-                LoggerHelper.Info($"MouseInput: {Config.DesktopWindow.Mouse}");
-                LoggerHelper.Info($"KeyboardInput: {Config.DesktopWindow.KeyBoard}");
-                LoggerHelper.Info($"Link: {Config.DesktopWindow.Link}");
-                LoggerHelper.Info($"Check: {Config.DesktopWindow.Check}");
+                if (logConfig)
+                {
+                    LoggerHelper.Info($"Name: {Config.DesktopWindow.Name}");
+                    LoggerHelper.Info($"HWnd: {Config.DesktopWindow.HWnd}");
+                    LoggerHelper.Info($"ScreenCap: {Config.DesktopWindow.ScreenCap}");
+                    LoggerHelper.Info($"MouseInput: {Config.DesktopWindow.Mouse}");
+                    LoggerHelper.Info($"KeyboardInput: {Config.DesktopWindow.KeyBoard}");
+                    LoggerHelper.Info($"Link: {Config.DesktopWindow.Link}");
+                    LoggerHelper.Info($"Check: {Config.DesktopWindow.Check}");
+                }
 
                 return new MaaWin32Controller(
                     Config.DesktopWindow.HWnd,
@@ -1647,15 +1736,18 @@ public class MaaProcessor
         }
     }
 
-    public void ConnectToMAA()
+    public void ConnectToMAA(bool logConfig)
     {
-        LoggerHelper.Info("Loading MAA Controller Configuration...");
-        ConfigureMaaProcessorForADB();
-        ConfigureMaaProcessorForWin32();
+        if (logConfig)
+        {
+            LoggerHelper.Info("Loading MAA Controller Configuration...");
+        }
+        ConfigureMaaProcessorForADB(logConfig);
+        ConfigureMaaProcessorForWin32(logConfig);
         ConfigureMaaProcessorForPlayCover();
     }
 
-    private void ConfigureMaaProcessorForADB()
+    private void ConfigureMaaProcessorForADB(bool logConfig)
     {
         if (Instances.TaskQueueViewModel.CurrentController == MaaControllerTypes.Adb)
         {
@@ -1664,8 +1756,11 @@ public class MaaProcessor
 
             Config.AdbDevice.Input = adbInputType;
             Config.AdbDevice.ScreenCap = adbScreenCapType;
-            LoggerHelper.Info(
-                $"{LangKeys.AdbInputMode.ToLocalization()}{adbInputType},{LangKeys.AdbCaptureMode.ToLocalization()}{adbScreenCapType}");
+            if (logConfig)
+            {
+                LoggerHelper.Info(
+                    $"{LangKeys.AdbInputMode.ToLocalization()}{adbInputType},{LangKeys.AdbCaptureMode.ToLocalization()}{adbScreenCapType}");
+            }
         }
     }
 
@@ -1695,7 +1790,7 @@ public class MaaProcessor
         };
     }
 
-    private void ConfigureMaaProcessorForWin32()
+    private void ConfigureMaaProcessorForWin32(bool logConfig)
     {
         if (Instances.TaskQueueViewModel.CurrentController == MaaControllerTypes.Win32)
         {
@@ -1707,8 +1802,11 @@ public class MaaProcessor
             Config.DesktopWindow.KeyBoard = win32KeyboardInputType;
             Config.DesktopWindow.ScreenCap = winScreenCapType;
 
-            LoggerHelper.Info(
-                $"{LangKeys.MouseInput.ToLocalization()}:{win32MouseInputType},{LangKeys.KeyboardInput.ToLocalization()}:{win32KeyboardInputType},{LangKeys.AdbCaptureMode.ToLocalization()}{winScreenCapType}");
+            if (logConfig)
+            {
+                LoggerHelper.Info(
+                    $"{LangKeys.MouseInput.ToLocalization()}:{win32MouseInputType},{LangKeys.KeyboardInput.ToLocalization()}:{win32KeyboardInputType},{LangKeys.AdbCaptureMode.ToLocalization()}{winScreenCapType}");
+            }
         }
     }
 
@@ -1749,6 +1847,89 @@ public class MaaProcessor
         _taskLoader ??= new TaskLoader(Interface);
         _taskLoader.LoadTasks(tasks, TasksSource, ref FirstTask, oldDrags);
     }
+
+    private void ResetActionFailedCount()
+    {
+        _screencapFailedCount = 0;
+    }
+    public void ResetScreencapFailureLogFlags()
+    {
+        lock (_screencapLogLock)
+        {
+            _screencapAbortLogPending = false;
+            _screencapDisconnectedLogPending = false;
+            _screencapFailureLogged = false;
+        }
+    }
+        
+    
+
+    public bool TryConsumeScreencapFailureLog(out bool shouldAbort, out bool shouldDisconnected)
+    {
+        lock (_screencapLogLock)
+        {
+            shouldAbort = _screencapAbortLogPending;
+            shouldDisconnected = _screencapDisconnectedLogPending;
+            _screencapAbortLogPending = false;
+            _screencapDisconnectedLogPending = false;
+            return shouldAbort || shouldDisconnected;
+        }
+    }
+
+    public bool HandleScreencapStatus(MaaJobStatus status, bool stopTaskOnLimit)
+    {
+        if (status == MaaJobStatus.Invalid || status == MaaJobStatus.Failed)
+        {
+            return HandleScreencapFailure(stopTaskOnLimit);
+        }
+
+        if (status == MaaJobStatus.Succeeded)
+        {
+            _screencapFailedCount = 0;
+        }
+
+        return false;
+    }
+
+    private bool HandleScreencapFailure(bool stopTaskOnLimit)
+    {
+        if (Instances.TaskQueueViewModel.IsConnected && ++_screencapFailedCount <= ActionFailedLimit)
+        {
+            return false;
+        }
+
+        _screencapFailedCount = 0;
+        Instances.TaskQueueViewModel.SetConnected(false);
+        lock (_screencapLogLock)
+        {
+            if (!_screencapFailureLogged)
+            {
+                if (stopTaskOnLimit)
+                {
+                    _screencapAbortLogPending = true;
+                }
+                else
+                {
+                    _screencapDisconnectedLogPending = true;
+                }
+                _screencapFailureLogged = true;
+            }
+        }
+        if (stopTaskOnLimit)
+        {
+
+            Instances.TaskQueueViewModel.StopTask();
+            SetTasker();
+        }
+        else
+        {
+            SetTasker();
+        }
+
+        return true;
+    }
+
+
     private string? _tempResourceVersion;
 
     public void AppendVersionLog(string? resourceVersion)
@@ -2218,6 +2399,7 @@ public class MaaProcessor
 
     public async Task StartTask(List<DragItemViewModel>? tasks, bool onlyStart = false, bool checkUpdate = false)
     {
+        ResetActionFailedCount();
         Status = MFATask.MFATaskStatus.NOT_STARTED;
         CancellationTokenSource = new CancellationTokenSource();
 
@@ -2235,6 +2417,16 @@ public class MaaProcessor
         }
 
         AddPostTasksAsync(onlyStart, checkUpdate, token);
+        _taskQueueTotal = TaskQueue.Count;
+        if (_taskQueueTotal > 0)
+        {
+            SetTaskbarProgress(0, _taskQueueTotal);
+        }
+        else
+        {
+            ClearTaskbarProgress();
+        }
+
         await TaskManager.RunTaskAsync(async () =>
         {
             await ExecuteTasks(token);
@@ -2287,6 +2479,17 @@ public class MaaProcessor
         {
             foreach (var selectAdvanced in advanceds)
             {
+                if (string.IsNullOrWhiteSpace(selectAdvanced.PipelineOverride) || selectAdvanced.PipelineOverride == "{}")
+                {
+                    if (Interface?.Advanced?.TryGetValue(selectAdvanced.Name ?? string.Empty, out var interfaceAdvanced) == true)
+                    {
+                        var inputValues = selectAdvanced.Data
+                            .Where(kv => kv.Value != null)
+                            .ToDictionary(kv => kv.Key, kv => kv.Value!);
+                        selectAdvanced.PipelineOverride = interfaceAdvanced.GenerateProcessedPipeline(inputValues);
+                    }
+                }
+
                 if (!string.IsNullOrWhiteSpace(selectAdvanced.PipelineOverride) && selectAdvanced.PipelineOverride != "{}")
                 {
                     var param = JsonConvert.DeserializeObject<Dictionary<string, JToken>>(selectAdvanced.PipelineOverride);
@@ -2344,6 +2547,13 @@ public class MaaProcessor
             {
                 // 从 Data 重新生成 PipelineOverride（因为 PipelineOverride 是 JsonIgnore 的）
                 string? pipelineOverride = selectOption.PipelineOverride;
+
+                if ((selectOption.Data == null || selectOption.Data.Count == 0) && interfaceOption.Inputs is { Count: > 0 })
+                {
+                    selectOption.Data = interfaceOption.Inputs
+                        .Where(input => !string.IsNullOrEmpty(input.Name))
+                        .ToDictionary(input => input.Name!, input => input.Default ?? string.Empty);
+                }
 
                 if ((string.IsNullOrWhiteSpace(pipelineOverride) || pipelineOverride == "{}")
                     && selectOption.Data != null
@@ -2447,7 +2657,7 @@ public class MaaProcessor
         //
         // var tasks = JsonConvert.DeserializeObject<Dictionary<string, MaaNode>>(json, settings);
         // tasks = tasks.MergeMaaNodes(taskModels);
-
+        Console.WriteLine(taskParams);
         return new NodeAndParam
         {
             Name = task.InterfaceItem?.DisplayName,
@@ -2514,42 +2724,59 @@ public class MaaProcessor
 
     async private Task HandleDeviceConnectionAsync(CancellationToken token, bool showMessage = true)
     {
-        var controllerType = Instances.TaskQueueViewModel.CurrentController;
-        var isAdb = controllerType == MaaControllerTypes.Adb;
-        var isPlayCover = controllerType == MaaControllerTypes.PlayCover;
-        var targetKey = controllerType switch
+        if (Interlocked.CompareExchange(ref _isConnecting, 1, 0) != 0)
         {
-            MaaControllerTypes.Adb => LangKeys.Emulator,
-            MaaControllerTypes.Win32 => LangKeys.Window,
-            MaaControllerTypes.PlayCover => "TabPlayCover",
-            _ => LangKeys.Window
-        };
+            return;
+        }
 
-        if (showMessage)
-            RootView.AddLogByKeys(LangKeys.ConnectingTo, null, true, targetKey);
-        else
-            ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.ConnectingTo.ToLocalizationFormatted(true, targetKey));
+        try
+        {
+            if (Instances.TaskQueueViewModel.IsConnected)
+            {
+                return;
+            }
 
-        if (!isPlayCover && Instances.TaskQueueViewModel.CurrentDevice == null && Instances.ConnectSettingsUserControlModel.AutoDetectOnConnectionFailed)
-            Instances.TaskQueueViewModel.TryReadAdbDeviceFromConfig(false, true);
+            var controllerType = Instances.TaskQueueViewModel.CurrentController;
+            var isAdb = controllerType == MaaControllerTypes.Adb;
+            var isPlayCover = controllerType == MaaControllerTypes.PlayCover;
+            var targetKey = controllerType switch
+            {
+                MaaControllerTypes.Adb => LangKeys.Emulator,
+                MaaControllerTypes.Win32 => LangKeys.Window,
+                MaaControllerTypes.PlayCover => "TabPlayCover",
+                _ => LangKeys.Window
+            };
 
-        var tuple = await TryConnectAsync(token);
-        var connected = tuple.Item1;
-        var shouldRetry = tuple.Item3;
+            if (showMessage)
+                RootView.AddLogByKeys(LangKeys.ConnectingTo, null, true, targetKey);
+            else
+                ToastHelper.Info(LangKeys.Tip.ToLocalization(), LangKeys.ConnectingTo.ToLocalizationFormatted(true, targetKey));
+
+            if (!isPlayCover && Instances.TaskQueueViewModel.CurrentDevice == null && Instances.ConnectSettingsUserControlModel.AutoDetectOnConnectionFailed)
+                Instances.TaskQueueViewModel.TryReadAdbDeviceFromConfig(false, true);
+
+            var tuple = await TryConnectAsync(token);
+            var connected = tuple.Item1;
+            var shouldRetry = tuple.Item3;
 
         if (!connected && isAdb && !tuple.Item2 && shouldRetry)
         {
             connected = await HandleAdbConnectionAsync(token, showMessage);
         }
 
-        if (!connected)
-        {
-            if (!tuple.Item2 && shouldRetry)
-                HandleConnectionFailureAsync(controllerType, token);
-            throw new Exception("Connection failed after all retries");
-        }
+            if (!connected)
+            {
+                if (!tuple.Item2 && shouldRetry)
+                    HandleConnectionFailureAsync(controllerType, token);
+                throw new Exception("Connection failed after all retries");
+            }
 
-        Instances.TaskQueueViewModel.SetConnected(true);
+            Instances.TaskQueueViewModel.SetConnected(true);
+        }
+        finally
+        {
+            Interlocked.Exchange(ref _isConnecting, 0);
+        }
     }
 
     async private Task<bool> HandleAdbConnectionAsync(CancellationToken token, bool showMessage = true)
@@ -2705,13 +2932,44 @@ public class MaaProcessor
         };
     }
 
+    private static void SetTaskbarProgress(int completed, int total)
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        try
+        {
+            TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.Normal);
+            TaskbarManager.Instance.SetProgressValue(completed, total);
+        }
+        catch
+        {
+        }
+    }
+
+    private static void ClearTaskbarProgress()
+    {
+        if (!OperatingSystem.IsWindows())
+            return;
+        try
+        {
+            TaskbarManager.Instance.SetProgressState(TaskbarProgressBarState.NoProgress);
+        }
+        catch
+        {
+        }
+    }
+
     #endregion
+
     #region 停止任务
 
     private Lock stop = new Lock();
 
     public void Stop(MFATask.MFATaskStatus status, bool finished = false, bool onlyStart = false, Action? action = null)
     {
+        ResetActionFailedCount();
+        ClearTaskbarProgress();
+        _taskQueueTotal = 0;
         // 在后台线程执行停止操作，避免阻塞 UI 线程
         TaskManager.RunTask(() =>
         {

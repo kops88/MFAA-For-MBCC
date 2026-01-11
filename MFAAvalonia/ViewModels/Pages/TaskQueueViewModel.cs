@@ -207,20 +207,27 @@ public partial class TaskQueueViewModel : ViewModelBase
             return;
         }
 
-        if (CurrentController != MaaControllerTypes.PlayCover && CurrentDevice == null)
-        {
-            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), "DeviceNotSelected".ToLocalization());
-            LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
-            return;
-        }
+        var beforeTask = ConfigurationManager.Current.GetValue(ConfigurationKeys.BeforeTask, "None");
+        var skipDeviceCheck = beforeTask.Contains("StartupSoftware", StringComparison.OrdinalIgnoreCase)
+            || Instances.ConnectSettingsUserControlModel.AutoDetectOnConnectionFailed;
 
-        if (CurrentController == MaaControllerTypes.Adb
-            && CurrentDevice is AdbDeviceInfo adbInfo
-            && string.IsNullOrWhiteSpace(adbInfo.AdbSerial))
+        if (!skipDeviceCheck)
         {
-            ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.AdbAddressEmpty.ToLocalization());
-            LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
-            return;
+            if (CurrentController != MaaControllerTypes.PlayCover && CurrentDevice == null)
+            {
+                ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), "DeviceNotSelected".ToLocalization());
+                LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
+                return;
+            }
+
+            if (CurrentController == MaaControllerTypes.Adb
+                && CurrentDevice is AdbDeviceInfo adbInfo
+                && string.IsNullOrWhiteSpace(adbInfo.AdbSerial))
+            {
+                ToastHelper.Warn(LangKeys.CannotStart.ToLocalization(), LangKeys.AdbAddressEmpty.ToLocalization());
+                LoggerHelper.Warning(LangKeys.CannotStart.ToLocalization());
+                return;
+            }
         }
 
         if (CurrentController == MaaControllerTypes.PlayCover
@@ -1184,7 +1191,7 @@ public partial class TaskQueueViewModel : ViewModelBase
                 isAdb ? LangKeys.NoEmulatorFoundDetail : "").ToLocalization());
         }
     }
-
+    
     public void TryReadPlayCoverConfig()
     {
         if (ConfigurationManager.Current.TryGetValue(ConfigurationKeys.PlayCoverConfig, out PlayCoverCoreConfig savedConfig))
@@ -1701,11 +1708,26 @@ public partial class TaskQueueViewModel : ViewModelBase
     {
         const int dstBytesPerPixel = 4;
 
-        targetBitmap ??= new WriteableBitmap(
-            new PixelSize(width, height),
-            new Vector(96, 96),
-            PixelFormat.Bgra8888,
-            AlphaFormat.Premul);
+        if (width <= 0 || height <= 0)
+        {
+            return targetBitmap ?? new WriteableBitmap(
+                    new PixelSize(1, 1),
+                    new Vector(96, 96),
+                    PixelFormat.Bgra8888,
+                    AlphaFormat.Premul);
+        }
+
+        if (targetBitmap == null
+            || targetBitmap.PixelSize.Width != width
+            || targetBitmap.PixelSize.Height != height)
+        {
+            targetBitmap?.Dispose();
+            targetBitmap = new WriteableBitmap(
+                new PixelSize(width, height),
+                new Vector(96, 96),
+                PixelFormat.Bgra8888,
+                AlphaFormat.Premul);
+        }
 
         using var framebuffer = targetBitmap.Lock();
         unsafe
@@ -1771,7 +1793,7 @@ public partial class TaskQueueViewModel : ViewModelBase
     }
 
     #endregion
-    
+
     #region 配置切换
 
     /// <summary>

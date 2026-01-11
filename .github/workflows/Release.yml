@@ -123,8 +123,13 @@ jobs:
         shell: bash
         run: |
           echo "Renaming assembly references from MFAAvalonia to MBCC小助手..."
-          # Use perl instead of sed for cross-platform compatibility (-i works same on macOS/Linux)
+          # 1. 替换代码中的资源引用路径
           find . -type f \( -name "*.axaml" -o -name "*.cs" \) -exec perl -pi -e 's|avares://MFAAvalonia|avares://MBCC小助手|g' {} +
+          
+          # 2. 修改 MFAAvalonia.csproj，显式插入 <AssemblyName> 标签
+          # 在第一个 <PropertyGroup> 内插入标签
+          perl -pi -e 'print "        <AssemblyName>MBCC小助手</AssemblyName>\n" if $. == 3' MFAAvalonia/MFAAvalonia.csproj
+          
           echo "Rename complete."
 
       - name: Build Solution
@@ -134,7 +139,7 @@ jobs:
           echo "Publishing MFAUpdater..."
           dotnet publish MFAUpdater/MFAUpdater.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -o "$PUBLISH_DIR"
           echo "Publishing MFAAvalonia as MBCC小助手..."
-          dotnet publish MFAAvalonia/MFAAvalonia.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -p:AssemblyName="MBCC小助手" -o "$PUBLISH_DIR"
+          dotnet publish MFAAvalonia/MFAAvalonia.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -o "$PUBLISH_DIR"
 
       - name: Sign macOS App with Adhoc Certificate
         if: ${{ matrix.is_macos == true }} 

@@ -123,12 +123,18 @@ jobs:
         shell: bash
         run: |
           echo "Renaming assembly references from MFAAvalonia to MBCC小助手..."
-          # Replace avares://MFAAvalonia with avares://MBCC小助手 in all .axaml and .cs files
-          find . -type f \( -name "*.axaml" -o -name "*.cs" \) -exec sed -i 's|avares://MFAAvalonia|avares://MBCC小助手|g' {} +
+          # Use perl instead of sed for cross-platform compatibility (-i works same on macOS/Linux)
+          find . -type f \( -name "*.axaml" -o -name "*.cs" \) -exec perl -pi -e 's|avares://MFAAvalonia|avares://MBCC小助手|g' {} +
           echo "Rename complete."
 
       - name: Build Solution
-        run: dotnet publish -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -p:AssemblyName="MBCC小助手"
+        shell: bash
+        run: |
+          PUBLISH_DIR="bin/AnyCPU/Release/${{ matrix.platform }}-${{ matrix.arch }}/publish"
+          echo "Publishing MFAUpdater..."
+          dotnet publish MFAUpdater/MFAUpdater.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -o "$PUBLISH_DIR"
+          echo "Publishing MFAAvalonia as MBCC小助手..."
+          dotnet publish MFAAvalonia/MFAAvalonia.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -p:AssemblyName="MBCC小助手" -o "$PUBLISH_DIR"
 
       - name: Sign macOS App with Adhoc Certificate
         if: ${{ matrix.is_macos == true }} 

@@ -119,27 +119,28 @@ jobs:
         env:
           NUGET_PACKAGES: ${{ github.workspace }}/.nuget/packages
 
-      - name: Rename Assembly for Release
-        shell: bash
-        run: |
-          echo "Renaming assembly references from MFAAvalonia to MBCC小助手..."
-          # 1. 替换代码中的资源引用路径
-          find . -type f \( -name "*.axaml" -o -name "*.cs" \) -exec perl -pi -e 's|avares://MFAAvalonia|avares://MBCC小助手|g' {} +
-          
-          # 2. 修改 MFAAvalonia.csproj，显式插入 <AssemblyName> 标签
-          # 在第一个 <PropertyGroup> 内插入标签
-          perl -pi -e 'print "        <AssemblyName>MBCC小助手</AssemblyName>\n" if $. == 3' MFAAvalonia/MFAAvalonia.csproj
-          
-          echo "Rename complete."
-
       - name: Build Solution
         shell: bash
         run: |
           PUBLISH_DIR="bin/AnyCPU/Release/${{ matrix.platform }}-${{ matrix.arch }}/publish"
+          
           echo "Publishing MFAUpdater..."
           dotnet publish MFAUpdater/MFAUpdater.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -o "$PUBLISH_DIR"
-          echo "Publishing MFAAvalonia as MBCC小助手..."
+          
+          echo "Publishing MFAAvalonia..."
           dotnet publish MFAAvalonia/MFAAvalonia.csproj -c Release -r ${{ matrix.platform }}-${{ matrix.arch }} -o "$PUBLISH_DIR"
+          
+          echo "Renaming executables to MBCC小助手..."
+          # Windows 平台重命名 .exe
+          if [ -f "$PUBLISH_DIR/MFAAvalonia.exe" ]; then
+            mv "$PUBLISH_DIR/MFAAvalonia.exe" "$PUBLISH_DIR/MBCC小助手.exe"
+          fi
+          # macOS/Linux 平台重命名无后缀二进制文件
+          if [ -f "$PUBLISH_DIR/MFAAvalonia" ]; then
+            mv "$PUBLISH_DIR/MFAAvalonia" "$PUBLISH_DIR/MBCC小助手"
+          fi
+          
+          echo "Build and Rename complete."
 
       - name: Sign macOS App with Adhoc Certificate
         if: ${{ matrix.is_macos == true }} 

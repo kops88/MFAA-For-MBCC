@@ -46,6 +46,10 @@ public partial class RootView : SukiWindow
             }
         };
 
+#if DEBUG
+        this.AttachDevTools();
+#endif
+
         // 为窗口大小变化添加监听，保存窗口大小
         SizeChanged += SaveWindowSizeOnChange;
         // 为窗口位置变化添加监听，保存窗口位置

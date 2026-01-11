@@ -986,3 +986,41 @@ vec3 totalGlow = (iFlowColor * maskValue1 * iFlowIntensity + iSecFlowColor * mas
 - **零 GC 渲染**: 预分配了 Uniform 变量所需的 `float[]` 数组，避免在每秒 60 帧的渲染循环中产生任何内存分配。
 - **即时适配**: 系统支持在运行时动态切换遮罩。例如，更换为 `mark5.jpeg` 后，流光会立即呈现出烟雾般的丝滑质感。
 - **精简指令**: 移除了原有的 FBM 噪声、感知亮度计算等指令，大幅降低了移动端或低端 GPU 的发热量。
+
+
+## 操作步骤
+### 给卡片系统添加设置项
+
+若需要为卡片系统添加一个新的全局开关或配置项（例如：启用某种特效），请遵循以下标准化流程：
+
+1. **定义配置键 (Configuration Key)**
+   在 [ConfigurationKeys.cs](file:///f:/Epic/ueProject/Other/MFA-for-MBCC/MFAAvalonia/Configuration/ConfigurationKeys.cs) 的 `#region 卡片设置` 中添加唯一的常量字符串。
+   ```csharp
+   public const string YourNewSetting = "Card.YourNewSetting";
+   ```
+
+2. **在全局 ViewModel 中注册属性**
+   在 [RootViewModel.cs](file:///f:/Epic/ueProject/Other/MFA-for-MBCC/MFAAvalonia/ViewModels/Windows/RootViewModel.cs) 中添加对应的 `ObservableProperty`。
+   - **初始化**：使用 `ConfigurationManager.Current.GetValue` 从配置中加载初始值。
+   - **持久化**：实现 `partial void On...Changed` 方法，在值改变时调用 `ConfigurationManager.Current.SetValue` 自动保存。
+   ```csharp
+   [ObservableProperty] private bool _yourNewSetting = ConfigurationManager.Current.GetValue(ConfigurationKeys.YourNewSetting, true);
+
+   partial void OnYourNewSettingChanged(bool value) => ConfigurationManager.Current.SetValue(ConfigurationKeys.YourNewSetting, value);
+   ```
+
+3. **在设置界面添加控件**
+   在设置页面（如 [CardSettings2UserControl.axaml](file:///f:/Epic/ueProject/Other/MFA-for-MBCC/MFAAvalonia/Card/Settings/CardSettings2UserControl.axaml)）中添加 UI 控件（通常是 `ToggleSwitch`）。
+   - **绑定**：将 `IsChecked` 绑定到 `RootViewModel` 的属性，模式设为 `TwoWay`。
+   ```xml
+   <ToggleSwitch IsChecked="{Binding YourNewSetting, Mode=TwoWay}" Content="说明文字" />
+   ```
+
+4. **在目标视图中应用逻辑**
+   在需要受该设置影响的控件（如 [CardSample.axaml](file:///f:/Epic/ueProject/Other/MFA-for-MBCC/MFAAvalonia/Card/CardSample.axaml)）中应用绑定。
+   - **跨 DataContext 访问**：由于 `CardSample` 的 DataContext 通常是 `CardViewModel`，需使用 `x:Static` 访问全局实例 `helper:Instances.RootViewModel`。
+   ```xml
+   <SomeEffect IsVisible="{Binding YourNewSetting, Source={x:Static helper:Instances.RootViewModel}}" />
+   ```
+
+---

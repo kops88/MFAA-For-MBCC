@@ -24,7 +24,7 @@
                           Background="Transparent"
                           PointerReleased="ClickBlankSpace">
                 <!-- 绑定显示源 -->
-                <ItemsRepeater ItemsSource="{Binding PlayerCards}">
+                <ItemsRepeater ItemsSource="{Binding DisplayCards}">
                     <ItemsRepeater.Layout>
                         <WrapLayout Orientation="Horizontal" />
                     </ItemsRepeater.Layout>
@@ -71,6 +71,13 @@
                     IsHitTestVisible="False"
                     IsDragbility="False"
                     Margin="0"/>
+                <TextBlock Text="{Binding SelectedCard.Name}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Bottom"
+                           Margin="0 0 0 20"
+                           FontWeight="Bold"
+                           FontSize="25"
+                           Foreground="#CCFFFFFF"/>
             </Grid>
 
             <!-- 测试发光卡片按钮 -->

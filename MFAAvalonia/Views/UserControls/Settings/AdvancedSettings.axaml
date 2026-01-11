@@ -1,4 +1,4 @@
-﻿<UserControl xmlns="https://github.com/avaloniaui"
+<UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
@@ -37,6 +37,11 @@
                 <!-- 热键设置 -->
                 <Expander Header="{markup:I18n {x:Static helper:LangKeys.HotKeySettings}}">
                     <settings:HotKeySettingsUserControl />
+                </Expander>
+
+                <!-- 外部通知设置 -->
+                <Expander Header="{markup:I18n {x:Static helper:LangKeys.ExternalNotificationSettings}}">
+                    <settings:ExternalNotificationSettingsUserControl />
                 </Expander>
             </StackPanel>
         </ScrollViewer>

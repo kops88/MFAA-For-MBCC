@@ -158,6 +158,10 @@ public static class ConfigurationKeys
     #region 卡片设置
 
     public const string EnableCardSystem = "Card.EnableCardSystem";
+    public const string EnableCardEffect = "Card.EnableCardEffect";
+    public const string EnableBorderEffect = "Card.EnableBorderEffect";
+    public const string EnableHideDuplicateCards = "Card.EnableHideDuplicateCards";
+    public const string NeedCardName = "Card.NeedCardName";
     public const string LoginAutoPull = "Card.LoginAutoPull";
     public const string TaskCompleteAutoPull = "Card.TaskCompleteAutoPull";
 

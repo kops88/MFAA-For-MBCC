@@ -1,7 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Collections.Specialized;
+using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading.Tasks;
@@ -23,8 +26,13 @@ namespace MFAAvalonia.ViewModels.Pages;
     {
         private CCMgr CCMgrInstance;
         private PlayerDataHandler PlayerDataHandler;
+        private bool _isUpdatingNoRepeat;
 
-        public ObservableCollection<CardViewModel>  PlayerCards { get; } = new();
+        public ObservableCollection<CardViewModel> PlayerCards { get; } = new();
+
+        public ObservableCollection<CardViewModel> PlayerCardsNoRepeat { get; } = new();
+
+        public ObservableCollection<CardViewModel> DisplayCards { get; } = new();
 
         [ObservableProperty]
         /** 放大面板 */
@@ -72,10 +80,58 @@ namespace MFAAvalonia.ViewModels.Pages;
             // 重要：不要在构造函数里同步加载并解码大量图片（会直接卡住“打开页面”）
             _ = LoadPlayerCardsAsync();
 
+            PlayerCards.CollectionChanged += (s, e) => UpdateNoRepeatCards();
+            Instances.RootViewModel.PropertyChanged += RootViewModel_PropertyChanged;
+
             CCMgrInstance =  CCMgr.Instance;
             CCMgrInstance.SetCCVM(this);
             CCMgrInstance.OnStart();
             LoggerHelper.Info("01:CardCollectionViewModel, 构造");
+        }
+
+        private void RootViewModel_PropertyChanged(object? sender, PropertyChangedEventArgs e)
+        {
+            if (e.PropertyName == nameof(Instances.RootViewModel.EnableHideDuplicateCards))
+            {
+                LoggerHelper.Info($"EnableHideDuplicateCards changed to: {Instances.RootViewModel.EnableHideDuplicateCards}");
+                RefreshDisplayCards();
+            }
+        }
+
+        private void UpdateNoRepeatCards()
+        {
+            if (_isUpdatingNoRepeat) return;
+            
+            // 使用 StringComparer.OrdinalIgnoreCase 确保路径匹配一致性
+            var distinctCards = PlayerCards
+                .Where(c => !string.IsNullOrEmpty(c.ImagePath))
+                .GroupBy(c => c.ImagePath.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToList();
+
+            LoggerHelper.Info($"Updating NoRepeatCards. PlayerCards: {PlayerCards.Count}, Distinct: {distinctCards.Count}");
+
+            PlayerCardsNoRepeat.Clear();
+            foreach (var card in distinctCards)
+            {
+                PlayerCardsNoRepeat.Add(card);
+            }
+            
+            RefreshDisplayCards();
+        }
+
+        private void RefreshDisplayCards()
+        {
+            var isHide = Instances.RootViewModel.EnableHideDuplicateCards;
+            var source = isHide ? PlayerCardsNoRepeat : PlayerCards;
+
+            LoggerHelper.Info($"Refreshing DisplayCards. isHide: {isHide}, Source count: {source.Count}");
+
+            DisplayCards.Clear();
+            foreach (var card in source)
+            {
+                DisplayCards.Add(card);
+            }
         }
 
         private async Task LoadPlayerCardsAsync()
@@ -103,10 +159,14 @@ namespace MFAAvalonia.ViewModels.Pages;
 
                 await Dispatcher.UIThread.InvokeAsync(() =>
                 {
+                    _isUpdatingNoRepeat = true;
                     PlayerDataHandler = list.handler;
                     PlayerCards.Clear();
                     foreach (var vm in list.result)
                         PlayerCards.Add(vm);
+                    _isUpdatingNoRepeat = false;
+                    
+                    UpdateNoRepeatCards();
 
                     LoggerHelper.Info("008:LoadPlayerCardsAsync, 加载玩家数据");
                 });
@@ -114,6 +174,7 @@ namespace MFAAvalonia.ViewModels.Pages;
             catch (Exception ex)
             {
                 LoggerHelper.Error($"LoadPlayerCardsAsync failed: {ex.Message}");
+                _isUpdatingNoRepeat = false;
             }
         }
         

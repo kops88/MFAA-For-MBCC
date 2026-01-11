@@ -292,6 +292,9 @@ public partial class SukiTheme : Styles
             new DefaultSukiColorTheme(SukiColor.Red, Color.Parse("#D03A2F"), Color.Parse("#2FC5D0")),
             new DefaultSukiColorTheme(SukiColor.Green, Color.Parse("#537834"), Color.Parse("#B24DB0")),
             new DefaultSukiColorTheme(SukiColor.Blue, Color.Parse("#0A59F7"), Color.Parse("#F7A80A")),
+            new DefaultSukiColorTheme(SukiColor.Pink, Color.Parse("#FF69B4"), Color.Parse("#FF1493")),
+            new DefaultSukiColorTheme(SukiColor.Purple, Color.Parse("#800080"), Color.Parse("#9932CC")),
+            new DefaultSukiColorTheme(SukiColor.FreshGreen, Color.Parse("#90EE90"), Color.Parse("#00FA9A")),
         };
         DefaultColorThemes = defaultThemes.ToDictionary(x => x.ThemeColor, y => (SukiColorTheme)y);
     }

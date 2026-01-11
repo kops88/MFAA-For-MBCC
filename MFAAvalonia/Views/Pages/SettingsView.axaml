@@ -33,11 +33,11 @@
             <suki:SettingsLayout Name="SettingsLayout" ScrollAnimationSpeed="3" MinWidthWhetherStackSummaryShow="700" StackSummaryWidth="220">
                 <suki:SettingsLayout.Items>
                     <suki:SettingsLayoutItem
-                    Content="{extensions:ServiceProvider ServiceType={x:Type settings:GuiSettingsUserControl}}"
-                    Header="{markup:I18n {x:Static helper:LangKeys.UiSettings}}" />
-                <suki:SettingsLayoutItem
-                    Content="{extensions:ServiceProvider ServiceType={x:Type settings:CardSettings2UserControl}}"
-                    Header="卡片设置" />
+                        Content="{extensions:ServiceProvider ServiceType={x:Type settings:CardSettings2UserControl}}"
+                        Header="卡片设置" />
+                    <suki:SettingsLayoutItem
+                        Content="{extensions:ServiceProvider ServiceType={x:Type settings:GuiSettingsUserControl}}"
+                        Header="{markup:I18n {x:Static helper:LangKeys.UiSettings}}" />
                 <suki:SettingsLayoutItem
                     Content="{extensions:ServiceProvider ServiceType={x:Type settings:PerformanceUserControl}}"
                     Header="{markup:I18n {x:Static helper:LangKeys.PerformanceSettings}}" />
@@ -47,9 +47,6 @@
                     <suki:SettingsLayoutItem
                         Content="{extensions:ServiceProvider ServiceType={x:Type settings:StartSettingsUserControl}}"
                         Header="{markup:I18n {x:Static helper:LangKeys.StartupSettings}}" />
-                    <suki:SettingsLayoutItem
-                        Content="{extensions:ServiceProvider ServiceType={x:Type settings:ExternalNotificationSettingsUserControl}}"
-                        Header="{markup:I18n {x:Static helper:LangKeys.ExternalNotificationSettings}}" />
                     <suki:SettingsLayoutItem
                         Content="{extensions:ServiceProvider ServiceType={x:Type settings:VersionUpdateSettingsUserControl}}"
                         Header="{markup:I18n {x:Static helper:LangKeys.UpdateSettings}}" />

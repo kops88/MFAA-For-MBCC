@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Avalonia.Layout;
 using Avalonia.Media;
@@ -19,7 +20,37 @@ public sealed class CCMgr
     private static readonly Lazy<CCMgr> LazyInsance = new Lazy<CCMgr>(() => new CCMgr());
     private CardCollectionViewModel? CCVM;
     private readonly List<CardBase> CardData;
+    public string NeedCardName { get; set; } = string.Empty;
+    public List<CardBase> NeedPool { get; private set; } = new();
     public static CCMgr Instance => LazyInsance.Value;
+
+    /** 校验卡片名称是否存在 */
+    public bool IsCardNameValid(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            NeedCardName = string.Empty;
+            NeedPool.Clear();
+            return false;
+        }
+
+        var trimmedName = name.Trim();
+        var matchedCards = CardData.Where(c => c.CharacterName != null && 
+            c.CharacterName.Any(cn => string.Equals(cn, trimmedName, StringComparison.OrdinalIgnoreCase))).ToList();
+
+        if (matchedCards.Any())
+        {
+            NeedCardName = trimmedName;
+            NeedPool = matchedCards;
+            return true;
+        }
+        else
+        {
+            NeedCardName = string.Empty;
+            NeedPool.Clear();
+            return false;
+        }
+    }
 
     private CCMgr()
     {
@@ -64,6 +95,10 @@ public sealed class CCMgr
 
     public CardBase GetRandomCardBase()
     {
+        if (!string.IsNullOrEmpty(NeedCardName) && NeedPool.Any())
+        {
+            return PullExecuter.PullOne(NeedPool);
+        }
         var cb = PullExecuter.PullOne(CardData);
         return cb;
     }
@@ -100,7 +135,7 @@ public sealed class CCMgr
             // Owner 可能已关闭，这里做兼容避免崩溃
             var owner = Instances.RootView;
             if (owner != null && owner.IsVisible)
-                await window.ShowDialog(owner);
+                window.Show(owner);
             else
                 window.Show();
             LoggerHelper.Info("PullOne()");

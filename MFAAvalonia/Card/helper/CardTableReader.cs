@@ -36,7 +36,8 @@ public static class CardTableReader
                 cards.Add(new CardBase
                 {
                     Name = columns[1].Trim(),
-                    ImagePath = $"{CardImgBasePath}{columns[2].Trim()}.jpg"
+                    ImagePath = $"{CardImgBasePath}{columns[2].Trim()}.jpg",
+                    CharacterName = columns[3].Trim().Split('|').ToList()
                 });
             }
         }

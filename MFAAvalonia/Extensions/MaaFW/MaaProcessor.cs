@@ -1,5 +1,4 @@
 using Avalonia.Controls;
-using Avalonia.Threading;
 using MaaFramework.Binding;
 using MaaFramework.Binding.Buffers;
 using MaaFramework.Binding.Notification;
@@ -29,7 +28,6 @@ using Bitmap = Avalonia.Media.Imaging.Bitmap;
 using Brushes = Avalonia.Media.Brushes;
 using MaaAgentClient = MaaFramework.Binding.MaaAgentClient;
 using MaaController = MaaFramework.Binding.MaaController;
-using MFAAvalonia.Utilities.CardClass;
 using MaaGlobal = MaaFramework.Binding.MaaGlobal;
 using MaaResource = MaaFramework.Binding.MaaResource;
 using MaaTasker = MaaFramework.Binding.MaaTasker;
@@ -152,25 +150,9 @@ public class MaaProcessor
 
             if (value != null)
             {
-                // 将 VM 更新延迟到初始化完成之后，避免循环依赖导致死锁
-                Dispatcher.UIThread.Post(() =>
-                {
-                    try
-                    {
-                        Instances.SettingsViewModel.ShowResourceIssues = !string.IsNullOrWhiteSpace(value.Url) || !string.IsNullOrWhiteSpace(value.Github);
-                        Instances.SettingsViewModel.ResourceGithub = (!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url) ?? "";
-                        Instances.SettingsViewModel.ResourceIssues = $"{(!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url)}/issues";
-
-                        Instances.TaskQueueViewModel.InitializeControllerOptions();
-                        
-                        // 异步加载 Contact 和 Description 内容
-                        _ = LoadContactAndDescriptionAsync(value);
-                    }
-                    catch (Exception ex)
-                    {
-                        LoggerHelper.Error($"[MaaProcessor] 更新 ViewModel 失败: {ex.Message}");
-                    }
-                }, DispatcherPriority.Background);
+                Instances.SettingsViewModel.ShowResourceIssues = !string.IsNullOrWhiteSpace(value.Url) || !string.IsNullOrWhiteSpace(value.Github);
+                Instances.SettingsViewModel.ResourceGithub = (!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url) ?? "";
+                Instances.SettingsViewModel.ResourceIssues = $"{(!string.IsNullOrWhiteSpace(value.Github) ? value.Github : value.Url)}/issues";
 
                 // 加载多语言配置
                 if (value.Languages is { Count: > 0 })

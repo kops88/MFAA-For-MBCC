@@ -1,6 +1,5 @@
-using Avalonia.Collections;
+﻿using Avalonia.Collections;
 using Avalonia.Styling;
-using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using MFAAvalonia.Configuration;
@@ -111,31 +110,17 @@ public partial class SettingsViewModel : ViewModelBase
     public MFAHotKey HotKeyLinkStart
     {
         get => _hotKeyLinkStart;
-        set => SetHotKey(ref _hotKeyLinkStart, value, ConfigurationKeys.LinkStart, null);
+        set => SetHotKey(ref _hotKeyLinkStart, value, ConfigurationKeys.LinkStart, Instances.TaskQueueViewModel.ToggleCommand);
     }
 
-    public void SetHotKey(ref MFAHotKey value, MFAHotKey? newValue, string type, ICommand? command)
+    public void SetHotKey(ref MFAHotKey value, MFAHotKey? newValue, string type, ICommand command)
     {
         if (newValue != null)
         {
-            // 如果 command 为 null，尝试从对应的 ViewModel 动态获取，避免初始化时的循环依赖
-            var targetCommand = command;
-            if (targetCommand == null)
+            if (!GlobalHotkeyService.Register(newValue.Gesture, command))
             {
-                if (type == ConfigurationKeys.LinkStart)
-                {
-                    targetCommand = Instances.TaskQueueViewModel.ToggleCommand;
-                }
+                newValue = MFAHotKey.ERROR;
             }
-
-            if (targetCommand != null)
-            {
-                if (!GlobalHotkeyService.Register(newValue.Gesture, targetCommand))
-                {
-                    newValue = MFAHotKey.ERROR;
-                }
-            }
-            
             GlobalConfiguration.SetValue(type, newValue.ToString());
             SetProperty(ref value, newValue);
         }

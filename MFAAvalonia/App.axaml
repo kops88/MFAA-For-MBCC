@@ -4,8 +4,7 @@
     xmlns="https://github.com/avaloniaui"
     xmlns:sukiUi="clr-namespace:SukiUI;assembly=SukiUI"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:styling="clr-namespace:FluentAvalonia.Styling;assembly=FluentAvalonia"
-    xmlns:converters="clr-namespace:MFAAvalonia.Converters">
+    xmlns:styling="clr-namespace:FluentAvalonia.Styling;assembly=FluentAvalonia">
 
     <Application.Resources>
         <ResourceDictionary>
@@ -22,6 +21,7 @@
                 <ResourceInclude Source="avares://MFAAvalonia/Assets/Theme/DarkTheme.axaml" x:Key="Dark" />
             </ResourceDictionary.ThemeDictionaries>
         </ResourceDictionary>
+
     </Application.Resources>
     <Application.Styles>
         <FluentTheme />

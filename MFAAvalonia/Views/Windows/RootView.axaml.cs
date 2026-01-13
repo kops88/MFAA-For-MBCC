@@ -9,8 +9,6 @@ using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
 using MFAAvalonia.Helper;
 using MFAAvalonia.Helper.ValueType;
-using Avalonia.Diagnostics;
-using MFAAvalonia.ViewModels.Pages;
 using MFAAvalonia.ViewModels.Windows;
 using SukiUI.Controls;
 using SukiUI.Dialogs;
@@ -20,7 +18,6 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using MFAAvalonia.Utilities.CardClass;
 
 namespace MFAAvalonia.Views.Windows;
 
@@ -64,16 +61,7 @@ public partial class RootView : SukiWindow
 
                 // 加载UI
                 LoadUI();
-
-                var enableCardSystem = ConfigurationManager.Current.GetValue(ConfigurationKeys.EnableCardSystem, true);
-                var loginAutoPull = ConfigurationManager.Current.GetValue(ConfigurationKeys.LoginAutoPull, true);
-
-                if (enableCardSystem && loginAutoPull)
-                {
-                    _ = CCMgr.Instance.PullOne();
-                }
             });
-
         };
         if (Program.IsNewInstance)
         {
@@ -141,10 +129,6 @@ public partial class RootView : SukiWindow
             // 确保窗口大小和位置被立即保存（绕过防抖机制）
             MaaProcessor.Dispose();
             DispatcherHelper.PostOnMainThread(SaveWindowSizeAndPositionImmediately);
-            
-            // 保存卡片收藏数据
-            CCMgr.Instance.BeforeClosed();
-            
             if (!noLog)
                 LoggerHelper.Info("MFA Closed!");
             TrayIconManager.DisposeTrayIcon(Application.Current);

@@ -318,9 +318,6 @@ public class AvaloniaMemoryCracker : IDisposable
     {
         _monitorTask = Task.Run(async () =>
         {
-            // 初始延迟，避免在应用启动的关键阶段干扰资源加载
-            try { await Task.Delay(5000, _cts.Token); } catch { return; }
-
             while (!_cts.IsCancellationRequested)
             {
                 try

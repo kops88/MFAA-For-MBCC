@@ -1,0 +1,106 @@
+// ============================================================================
+// 卡牌流光特效Shader - 基于遮罩纹理
+// 实现高性能的纹理滚动流光效果
+// ============================================================================
+
+// === 自定义Uniform变量 ===
+uniform shader iImage;              // 卡牌原始图像
+uniform shader iMask;               // 流光遮罩图像
+
+// 图像尺寸
+uniform vec2 iImageSize;            // 原始图像的实际尺寸
+uniform vec2 iMaskSize;             // 遮罩图像的实际尺寸
+
+// 流光效果参数
+uniform float iFlowSpeed;
+uniform float iFlowWidth;           // 遮罩缩放倍率
+uniform float iFlowAngle;
+uniform float iFlowIntensity;
+uniform float iSecFlowSpeedMult;
+uniform float iSecFlowIntensity;
+
+// 闪烁效果参数
+uniform float iEnableSparkle;
+uniform float iSparkleFreq;
+uniform float iSparkleIntensity;
+
+// 颜色参数
+uniform vec3 iFlowColor;
+uniform vec3 iSecFlowColor;
+uniform vec3 iSparkleColor;
+
+// 混合参数
+uniform float iBlendMode;
+uniform float iOverallIntensity;
+
+// ============================================================================
+// 辅助函数
+// ============================================================================
+
+// 计算感知亮度
+float getLuminance(vec3 color) {
+    return dot(color, vec3(0.299, 0.587, 0.114));
+}
+
+// 混合模式实现
+vec3 blendColors(vec3 base, vec3 glow, float mode) {
+    if (mode < 0.5) {
+        return base + glow;
+    } else if (mode < 1.5) {
+        return 1.0 - (1.0 - base) * (1.0 - glow);
+    } else {
+        vec3 result;
+        if (base.r < 0.5) result.r = 2.0 * base.r * glow.r; else result.r = 1.0 - 2.0 * (1.0 - base.r) * (1.0 - glow.r);
+        if (base.g < 0.5) result.g = 2.0 * base.g * glow.g; else result.g = 1.0 - 2.0 * (1.0 - base.g) * (1.0 - glow.g);
+        if (base.b < 0.5) result.b = 2.0 * base.b * glow.b; else result.b = 1.0 - 2.0 * (1.0 - base.b) * (1.0 - glow.b);
+        return result;
+    }
+}
+
+// ============================================================================
+// 主函数
+// ============================================================================
+vec4 main(vec2 fragCoord) {
+    vec2 uv = fragCoord / iResolution.xy;
+    
+    // 采样原始图像
+    vec4 originalColor = iImage.eval(fragCoord);
+    vec3 color = originalColor.rgb;
+    
+    // 计算流光遮罩
+    float angle = iFlowAngle;
+    vec2 dir1 = vec2(cos(angle), sin(angle));
+    vec2 dir2 = vec2(cos(angle + 1.57), sin(angle + 1.57));
+    
+    // 遮罩采样坐标 (使用 fract 实现 TileMode.Repeat 的模拟，虽然 shader 外部已设置)
+    float scale = 1.0 / max(0.1, iFlowWidth);
+    vec2 maskUv1 = uv * scale + dir1 * (iTime * iFlowSpeed);
+    vec2 maskUv2 = uv * scale * 1.2 + dir2 * (iTime * iFlowSpeed * iSecFlowSpeedMult);
+    
+    vec2 maskCoord1 = fract(maskUv1) * iMaskSize;
+    vec2 maskCoord2 = fract(maskUv2) * iMaskSize;
+    
+    float maskValue1 = iMask.eval(maskCoord1).r;
+    float maskValue2 = iMask.eval(maskCoord2).r;
+    
+    // 组合遮罩
+    float combinedMask = maskValue1 * maskValue2 * 2.0;
+    
+    // 闪烁效果
+    if (iEnableSparkle > 0.5) {
+        float sparkle = sin(iTime * iSparkleFreq + combinedMask * 10.0) * 0.5 + 0.5;
+        combinedMask *= mix(1.0, sparkle, iSparkleIntensity);
+    }
+    
+    // 计算最终流光颜色
+    vec3 glowColor = iFlowColor * maskValue1 * iFlowIntensity + 
+                     iSecFlowColor * maskValue2 * iSecFlowIntensity;
+                     
+    vec3 totalGlow = glowColor * combinedMask * iOverallIntensity;
+    
+    // 应用到原图
+    vec3 finalColor = blendColors(color, totalGlow, iBlendMode);
+    finalColor = clamp(finalColor, 0.0, 1.0);
+    
+    return vec4(finalColor, originalColor.a * iAlpha);
+}

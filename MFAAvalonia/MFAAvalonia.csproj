@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>WinExe</OutputType>
         <Nullable>annotations</Nullable>
@@ -13,10 +13,13 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <Folder Include="Assets\CardImg\" />
         <Folder Include="Assets\Sound\"/>
         <Folder Include="Img\"/>
         <Folder Include="Models\"/>
         <AvaloniaResource Include="Assets\**"/>
+        <AvaloniaResource Include="Assets\CardImg\CardTable.csv" />
+        <Folder Include="Windows\" />
     </ItemGroup>
 
 
@@ -64,6 +67,17 @@
         <!-- Files to hide from end users (e.g., runtime or config files). Only supported on Windows. -->
         <!-- <BeautyHiddens>hostfxr;hostpolicy;*.deps.json;*.runtimeconfig*.json</BeautyHiddens> -->
         <BeautyOnPublishOnly>True</BeautyOnPublishOnly>
+    </PropertyGroup>
+
+    <!-- Debug symbols (for Rider/VS breakpoints) -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+        <DebugType>portable</DebugType>
+        <DebugSymbols>true</DebugSymbols>
+        <Optimize>false</Optimize>
+    </PropertyGroup>
+
+    <!-- Keep Release output clean (publish target also deletes PDBs) -->
+    <PropertyGroup Condition="'$(Configuration)' == 'Release'">
         <DebugType>none</DebugType>
         <DebugSymbols>false</DebugSymbols>
     </PropertyGroup>
@@ -80,8 +94,9 @@
         <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0"/>
         <PackageReference Include="Avalonia.Xaml.Interactions" Version="11.3.0.6"/>
         <PackageReference Include="Avalonia.Xaml.Interactivity" Version="11.3.0.6"/>
-        <!--Condition below is needed to remove Avalonia.Diagnostics package from build output in Release configuration.-->
-        <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="Avalonia.Diagnostics" Version="11.3.10" />
+        <!-- DevTools 桥接支持（https://docs.avaloniaui.net/zh-Hans/accelerate/tools/dev-tools/getting-started） -->
+        <!-- 注意：AvaloniaUI.DiagnosticsSupport 的版本号与 Avalonia 主包不一致，NuGet 上当前是 2.x -->
+        <PackageReference Condition="'$(Configuration)' == 'Debug'" Include="AvaloniaUI.DiagnosticsSupport" Version="2.1.1" />
         <PackageReference Include="CalcBindingAva" Version="2.5.3"/>
         <PackageReference Include="CrossPlatformProtectedData" Version="1.0.3"/>
         <PackageReference Include="FluentIcons.Avalonia.Fluent" Version="2.0.316.1"/>
@@ -158,6 +173,15 @@
             <DependentUpon>MultiInstanceEditorDialogView.axaml</DependentUpon>
             <SubType>Code</SubType>
         </Compile>
+        <Compile Update="Card\CardSample.axaml.cs">
+          <DependentUpon>CardSample.axaml</DependentUpon>
+          <SubType>Code</SubType>
+        </Compile>
+        <Compile Update="Card\PullResult.axaml.cs">
+          <DependentUpon>PullResult.axaml</DependentUpon>
+          <SubType>Code</SubType>
+        </Compile>
+        <Compile Remove="Views\UserControls\Settings\CardSettingsUserControl.axaml.cs" />
     </ItemGroup>
     <ItemGroup>
         <Compile Update="Assets\Localization\Strings.Designer.cs">
@@ -244,6 +268,9 @@
                  CopyToPublishDirectory="PreserveNewest">
             <Link>DependencySetup_依赖库安装_mac.sh</Link>
         </Content>
+    </ItemGroup>
+    <ItemGroup>
+      <AvaloniaXaml Remove="Views\UserControls\Settings\CardSettingsUserControl.axaml" />
     </ItemGroup>
 
     <!-- 为Linux/macOS脚本添加可执行权限（仅对应系统发布时生效） -->

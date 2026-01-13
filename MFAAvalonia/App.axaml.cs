@@ -4,6 +4,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Controls.Notifications;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
+using Avalonia.Diagnostics;
 using MFAAvalonia.Configuration;
 using MFAAvalonia.Extensions;
 using MFAAvalonia.Extensions.MaaFW;
@@ -48,13 +49,10 @@ public partial class App : Application
         base.Initialize();
         LoggerHelper.InitializeLogger();
         AvaloniaXamlLoader.Load(this);
+
         LanguageHelper.Initialize();
         ConfigurationManager.Initialize();
         FontService.Initialize();
-
-        // 保存引用以便在退出时正确释放
-        _memoryCracker = new AvaloniaMemoryCracker();
-        _memoryCracker.Cracker();
 
         GlobalHotkeyService.Initialize();
         TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException; //Task线程内未捕获异常处理事件
@@ -171,6 +169,7 @@ public partial class App : Application
             .AddView<ResourcesView, ResourcesViewModel>(services)
             .AddView<SettingsView, SettingsViewModel>(services)
             .AddView<ScreenshotView, ScreenshotViewModel>(services)
+            .AddView<CardCollection, CardCollectionViewModel>(services)
 
             // Add additional views
             .AddView<AddTaskDialogView, AddTaskDialogViewModel>(services)
@@ -186,6 +185,7 @@ public partial class App : Application
             .AddView<TimerSettingsUserControl, TimerSettingsUserControlModel>(services)
             .AddView<PerformanceUserControl, PerformanceUserControlModel>(services)
             .AddView<VersionUpdateSettingsUserControl, VersionUpdateSettingsUserControlModel>(services)
+            .AddOnlyView<CardSettings2UserControl, SettingsViewModel>(services)
             .AddOnlyView<AboutUserControl, SettingsViewModel>(services)
             .AddOnlyView<HotKeySettingsUserControl, SettingsViewModel>(services)
             .AddOnlyView<ConfigurationMgrUserControl, SettingsViewModel>(services);
@@ -195,6 +195,7 @@ public partial class App : Application
     {
         services.AddSingleton<ISukiToastManager, SukiToastManager>();
         services.AddSingleton<ISukiDialogManager, SukiDialogManager>();
+        
     }
 
     private void OnDispatcherUnhandledException(object sender, DispatcherUnhandledExceptionEventArgs e)
